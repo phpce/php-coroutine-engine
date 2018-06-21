@@ -109,6 +109,406 @@ int __riscosify_control = __RISCOSIFY_STRICT_UNIX_SPECS;
 #include "fpm_log.h"
 #include "zlog.h"
 
+
+
+// coroutine begin ====
+#include <event2/event.h>
+/* For sockaddr_in */  
+#include <netinet/in.h>
+
+#define CORO_DEFAULT 0
+#define CORO_YIELD 1
+#define CORO_END 2
+#define CORO_RESUME 3
+#define CORO_START 4
+
+typedef struct _php_coroutine_context{
+    jmp_buf *buf_ptr;
+    zend_execute_data *execute_data;
+    zend_execute_data *prev_execute_data;//execute for execute before yield
+    struct _php_coroutine_context *next;
+    struct _php_coroutine_context *prev;
+    int coro_state;
+    zend_vm_stack current_vm_stack;
+    zval* current_vm_stack_top;
+    zval* current_vm_stack_end;
+    zend_fcall_info_cache* func_cache;
+    zval *ret;
+}php_coroutine_context;
+
+static struct _g_coro_stack{
+    zend_vm_stack vm_stack;
+    zval* vm_stack_top;
+    zval* vm_stack_end;
+}g_coro_stack;
+
+/* use to stor coroutine context */
+
+static php_coroutine_context* current_coroutine_context = NULL;
+static int coroutine_context_count = 0;
+
+static void free_coroutine_context(php_coroutine_context* context){
+    current_coroutine_context = context->next;
+    if(coroutine_context_count>0){
+        coroutine_context_count--;
+
+        //unlink
+        context->prev->next = context->next;
+        context->next->prev = context->prev;
+        //todo free all data
+        efree(context->buf_ptr);
+        context->buf_ptr = NULL;
+        zend_vm_stack_free_call_frame(context->execute_data); //释放execute_data:销毁所有的PHP变量
+        context->execute_data = NULL;
+        efree(context->func_cache);
+        context->func_cache = NULL;
+        efree(context);
+        context = NULL;
+        if(coroutine_context_count == 0){
+            current_coroutine_context = NULL;
+        }
+    }
+}
+
+ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
+{
+	zend_execute_data *execute_data;
+
+	if (EG(exception) != NULL) {
+		return;
+	}
+
+	execute_data = zend_vm_stack_push_call_frame(ZEND_CALL_TOP_CODE | ZEND_CALL_HAS_SYMBOL_TABLE,
+		(zend_function*)op_array, 0, zend_get_called_scope(EG(current_execute_data)), zend_get_this_object(EG(current_execute_data)));
+	if (EG(current_execute_data)) {
+		execute_data->symbol_table = zend_rebuild_symbol_table();
+	} else {
+		execute_data->symbol_table = &EG(symbol_table);
+	}
+
+	zend_init_execute_data(execute_data, op_array, return_value);
+
+	// EX(prev_execute_data) = EG(current_execute_data);
+	// i_init_execute_data(execute_data, op_array, return_value);
+
+	zend_execute_ex(execute_data);
+	zend_vm_stack_free_call_frame(execute_data);
+}
+
+ZEND_API int zend_execute_scripts_coro(int type, zval *retval, int file_count, ...) /* {{{ */
+{
+
+
+	va_list files;
+	int i;
+	zend_file_handle *file_handle;
+	zend_op_array *op_array;
+
+	va_start(files, file_count);
+	for (i = 0; i < file_count; i++) {
+		file_handle = va_arg(files, zend_file_handle *);
+		if (!file_handle) {
+			continue;
+		}
+
+		op_array = zend_compile_file(file_handle, type);
+		if (file_handle->opened_path) {
+			zend_hash_add_empty_element(&EG(included_files), file_handle->opened_path);
+		}
+		zend_destroy_file_handle(file_handle);
+		if (op_array) {
+			zend_execute_coro(op_array, retval);
+			zend_exception_restore();
+			zend_try_exception_handler();
+			if (EG(exception)) {
+				zend_exception_error(EG(exception), E_ERROR);
+			}
+			destroy_op_array(op_array);
+			efree_size(op_array, sizeof(zend_op_array));
+		} else if (type==ZEND_REQUIRE) {
+			va_end(files);
+			return FAILURE;
+		}
+	}
+	va_end(files);
+
+	return SUCCESS;
+}
+/* }}} */
+
+/* {{{ php_execute_script
+ */
+PHPAPI int php_execute_script_coro(zend_file_handle *primary_file)
+{
+	zend_file_handle *prepend_file_p, *append_file_p;
+	zend_file_handle prepend_file = {{0}, NULL, NULL, 0, 0}, append_file = {{0}, NULL, NULL, 0, 0};
+#if HAVE_BROKEN_GETCWD
+	volatile int old_cwd_fd = -1;
+#else
+	char *old_cwd;
+	ALLOCA_FLAG(use_heap)
+#endif
+	int retval = 0;
+
+	EG(exit_status) = 0;
+#ifndef HAVE_BROKEN_GETCWD
+# define OLD_CWD_SIZE 4096
+	old_cwd = do_alloca(OLD_CWD_SIZE, use_heap);
+	old_cwd[0] = '\0';
+#endif
+
+	zend_try {
+		char realfile[MAXPATHLEN];
+
+#ifdef PHP_WIN32
+		if(primary_file->filename) {
+			UpdateIniFromRegistry((char*)primary_file->filename);
+		}
+#endif
+
+		PG(during_request_startup) = 0;
+
+		if (primary_file->filename && !(SG(options) & SAPI_OPTION_NO_CHDIR)) {
+#if HAVE_BROKEN_GETCWD
+			/* this looks nasty to me */
+			old_cwd_fd = open(".", 0);
+#else
+			php_ignore_value(VCWD_GETCWD(old_cwd, OLD_CWD_SIZE-1));
+#endif
+			VCWD_CHDIR_FILE(primary_file->filename);
+		}
+
+ 		/* Only lookup the real file path and add it to the included_files list if already opened
+		 *   otherwise it will get opened and added to the included_files list in zend_execute_scripts
+		 */
+ 		if (primary_file->filename &&
+ 		    (primary_file->filename[0] != '-' || primary_file->filename[1] != 0) &&
+ 			primary_file->opened_path == NULL &&
+ 			primary_file->type != ZEND_HANDLE_FILENAME
+		) {
+			if (expand_filepath(primary_file->filename, realfile)) {
+				primary_file->opened_path = zend_string_init(realfile, strlen(realfile), 0);
+				zend_hash_add_empty_element(&EG(included_files), primary_file->opened_path);
+			}
+		}
+
+		if (PG(auto_prepend_file) && PG(auto_prepend_file)[0]) {
+			prepend_file.filename = PG(auto_prepend_file);
+			prepend_file.opened_path = NULL;
+			prepend_file.free_filename = 0;
+			prepend_file.type = ZEND_HANDLE_FILENAME;
+			prepend_file_p = &prepend_file;
+		} else {
+			prepend_file_p = NULL;
+		}
+
+		if (PG(auto_append_file) && PG(auto_append_file)[0]) {
+			append_file.filename = PG(auto_append_file);
+			append_file.opened_path = NULL;
+			append_file.free_filename = 0;
+			append_file.type = ZEND_HANDLE_FILENAME;
+			append_file_p = &append_file;
+		} else {
+			append_file_p = NULL;
+		}
+		if (PG(max_input_time) != -1) {
+#ifdef PHP_WIN32
+			zend_unset_timeout();
+#endif
+			zend_set_timeout(INI_INT("max_execution_time"), 0);
+		}
+
+
+		/*
+		   If cli primary file has shabang line and there is a prepend file,
+		   the `start_lineno` will be used by prepend file but not primary file,
+		   save it and restore after prepend file been executed.
+		 */
+		if (CG(start_lineno) && prepend_file_p) {
+			zlog(ZLOG_DEBUG, "request prepend file file count 1/2 =============\n\n");
+
+			int orig_start_lineno = CG(start_lineno);
+
+			CG(start_lineno) = 0;
+			if (zend_execute_scripts_coro(ZEND_REQUIRE, NULL, 1, prepend_file_p) == SUCCESS) {
+				CG(start_lineno) = orig_start_lineno;
+				retval = (zend_execute_scripts_coro(ZEND_REQUIRE, NULL, 2, primary_file, append_file_p) == SUCCESS);
+			}
+		} else {
+
+			zlog(ZLOG_DEBUG, "request prepend file file count 3 =============\n\n");
+
+			retval = (zend_execute_scripts_coro(ZEND_REQUIRE, NULL, 3, prepend_file_p, primary_file, append_file_p) == SUCCESS);
+		}
+	} zend_end_try();
+
+	if (EG(exception)) {
+		zend_try {
+			zend_exception_error(EG(exception), E_ERROR);
+		} zend_end_try();
+	}
+
+#if HAVE_BROKEN_GETCWD
+	if (old_cwd_fd != -1) {
+		fchdir(old_cwd_fd);
+		close(old_cwd_fd);
+	}
+#else
+	if (old_cwd[0] != '\0') {
+		php_ignore_value(VCWD_CHDIR(old_cwd));
+	}
+	free_alloca(old_cwd, use_heap);
+#endif
+	return retval;
+}
+/* }}} */
+static int le_coroutine_php;
+
+
+#define MAX_LINE 80  
+
+void do_read(evutil_socket_t fd, short events, void *arg);  
+void do_write(evutil_socket_t fd, short events, void *arg);  
+  
+char rot13_char(char c)  
+{  
+    /* We don't want to use isalpha here; setting the locale would change 
+     * which characters are considered alphabetical. */  
+    if ((c >= 'a' && c <= 'm') || (c >= 'A' && c <= 'M'))  
+        return c + 13;  
+    else if ((c >= 'n' && c <= 'z') || (c >= 'N' && c <= 'Z'))  
+        return c - 13;  
+    else  
+        return c;  
+}  
+  
+struct fd_state {  
+    char buffer[MAX_LINE];  
+    size_t buffer_used;  
+  
+    size_t n_written;  
+    size_t write_upto;  
+  
+    struct event *read_event;  
+    struct event *write_event;  
+};  
+  
+struct fd_state * alloc_fd_state(struct event_base *base, evutil_socket_t fd)  
+{  
+    struct fd_state *state = malloc(sizeof(struct fd_state));  
+    if (!state)  
+        return NULL;  
+  
+    state->read_event = event_new(base, fd, EV_READ|EV_PERSIST, do_read, state);  
+    if (!state->read_event)  
+    {  
+        free(state);  
+        return NULL;  
+    }  
+  
+    state->write_event = event_new(base, fd, EV_WRITE|EV_PERSIST, do_write, state);  
+    if (!state->write_event)  
+    {  
+        event_free(state->read_event);  
+        free(state);  
+        return NULL;  
+    }  
+  
+    state->buffer_used = state->n_written = state->write_upto = 0;  
+  
+    assert(state->write_event);  
+    return state;  
+}  
+  
+void free_fd_state(struct fd_state *state)  
+{  
+    event_free(state->read_event);  
+    event_free(state->write_event);  
+    free(state);  
+}  
+  
+void do_read(evutil_socket_t fd, short events, void *arg)  
+{  
+    struct fd_state *state = arg;  
+    char buf[20];  
+    int i;  
+    ssize_t result;  
+    printf("\ncome in do_read: fd: %d, state->buffer_used: %d, sizeof(state->buffer): %d\n", fd, state->buffer_used, sizeof(state->buffer));  
+    while (1)  
+    {  
+        assert(state->write_event);  
+        result = recv(fd, buf, sizeof(buf), 0);  
+        if (result <= 0)  
+            break;  
+        printf("recv once, fd: %d, recv size: %d, recv buff: %s\n", fd, result, buf);  
+  
+        for (i=0; i < result; ++i)  
+        {  
+            if (state->buffer_used < sizeof(state->buffer))//如果读事件的缓冲区还未满，将收到的数据做转换  
+                state->buffer[state->buffer_used++] = rot13_char(buf[i]);  
+//              state->buffer[state->buffer_used++] = buf[i];//接收什么发送什么，不经过转换，测试用  
+            if (buf[i] == '\n') //如果遇到换行，添加写事件，并设置写事件的大小  
+            {  
+                assert(state->write_event);  
+                event_add(state->write_event, NULL);  
+                state->write_upto = state->buffer_used;  
+                printf("遇到换行符，state->write_upto: %d, state->buffer_used: %d\n",state->write_upto, state->buffer_used);  
+            }  
+        }  
+        printf("recv once, state->buffer_used: %d\n", state->buffer_used);  
+    }  
+    printf("read ok !!!!\n");
+    //判断最后一次接收的字节数  
+    if (result == 0)  
+    {  
+        free_fd_state(state);  
+    }  
+    else if (result < 0)  
+    {  
+        if (errno == EAGAIN) // XXXX use evutil macro  
+            return;  
+        perror("recv");  
+        free_fd_state(state);  
+    }  
+}  
+  
+void do_write(evutil_socket_t fd, short events, void *arg)  
+{  
+    struct fd_state *state = arg;  
+  
+    printf("\ncome in do_write, fd: %d, state->n_written: %d, state->write_upto: %d\n",fd, state->n_written, state->write_upto);  
+    while (state->n_written < state->write_upto)  
+    {  
+        ssize_t result = send(fd, state->buffer + state->n_written, state->write_upto - state->n_written, 0);  
+        if (result < 0) {  
+            if (errno == EAGAIN) // XXX use evutil macro  
+                return;  
+            free_fd_state(state);  
+            return;  
+        }  
+        assert(result != 0);  
+  
+        state->n_written += result;  
+        printf("send fd: %d, send size: %d, state->n_written: %d\n", fd, result, state->n_written);  
+    }  
+  
+    if (state->n_written == state->buffer_used)  
+    {  
+        printf("state->n_written == state->buffer_used: %d\n", state->n_written);  
+        state->n_written = state->write_upto = state->buffer_used = 1;  
+        printf("state->n_written = state->write_upto = state->buffer_used = 1\n");  
+        printf("close !!\n");
+        close(fd);
+    }  
+  
+    event_del(state->write_event);  
+}
+
+// coroutine end ====
+
+
+
+
 #ifndef PHP_WIN32
 /* XXX this will need to change later when threaded fastcgi is implemented.  shane */
 struct sigaction act, old_term, old_quit, old_int;
@@ -952,6 +1352,21 @@ static int is_valid_path(const char *path)
 }
 /* }}} */
 
+
+
+void test_log(char *text){
+
+    FILE *pfile;
+    size_t result;
+    pfile=fopen("/Users/sioomy/work/php-src/tests/fpmtext/fpmlog.txt","a+");
+
+    int lsize=strlen(text);//获取文件长度
+
+    result=fwrite(text,sizeof(char),lsize,pfile);//将pfile中内容读入pread指向内存中
+    fclose(pfile);
+}
+
+
 /* {{{ init_request_info
 
   initializes request_info structure
@@ -1026,6 +1441,7 @@ static void init_request_info(void)
 	char *script_path_translated = env_script_filename;
 	char *ini;
 	int apache_was_here = 0;
+
 
 	/* some broken servers do not have script_filename or argv0
 	 * an example, IIS configured in some ways.  then they do more
@@ -1565,6 +1981,279 @@ static zend_module_entry cgi_module_entry = {
 	STANDARD_MODULE_PROPERTIES
 };
 
+
+
+
+
+/**
+ * 用于传递request等信息
+ */
+typedef struct _g_accept_arg{
+    struct event_base *base;
+    fcgi_request *request;
+    zend_file_handle file_handle;
+    int max_requests;
+	int *requests;
+}g_accept_arg; 
+
+
+
+void do_accept(evutil_socket_t listener, short event, void *arg)  
+{  
+
+
+	zlog(ZLOG_DEBUG, "do_accept run!!!!!!");
+    struct event_base *base = ((g_accept_arg*) arg)->base;  
+    struct sockaddr_storage ss;  
+    socklen_t slen = sizeof(ss);  
+    int fd = accept(listener, (struct sockaddr*)&ss, &slen);  
+
+    fcgi_request *request = ((g_accept_arg*) arg)->request;
+    zend_file_handle file_handle = ((g_accept_arg*) arg)->file_handle;
+    int max_requests = ((g_accept_arg*) arg)->max_requests;
+	int requests = ((g_accept_arg*) arg)->requests;
+
+
+
+
+
+    fcgi_set_fd(request,fd);
+    
+    //初始化回调函数（来源于）while (EXPECTED(fcgi_accept_request(request) >= 0))
+    init_request_callback(request);
+    
+    //输出测试log
+    char str[100];
+    sprintf(str,"测试 do_accept() ok:%s\n",FCGI_GETENV(request, "SCRIPT_FILENAME"));
+    test_log(str);
+
+    sprintf(str,"测试 request:%d\n",request);
+    test_log(str);
+
+
+
+
+    // sprintf(str,"fpm_php_request_uri:%s\n",fpm_php_request_uri());
+    
+
+
+    // char test_str[] = "hello world!\n";
+
+    // ssize_t result = send(fd, test_str, strlen(test_str), 0);
+
+    // close(fd);
+
+    // if (fd < 0)  
+    // { // XXXX eagain??  
+    //     perror("accept");  
+    // }  
+    // else if (fd > FD_SETSIZE)  
+    // {  
+    //     close(fd); // XXX replace all closes with EVUTIL_CLOSESOCKET */  
+    // }  
+    // else  
+    // {  
+    //     php_printf("accept!");
+    //     struct fd_state *state;  
+    //     evutil_make_socket_nonblocking(fd);  
+    //     state = alloc_fd_state(base, fd);  
+    //     php_printf("alloc_fd_state ====== done!");
+    //     assert(state); /*XXX err*/  
+    //     assert(state->write_event);  
+    //     event_add(state->read_event, NULL);  
+    // }  
+
+
+
+	// SG(server_context) = (void *) request;
+	// init_request_info();
+	// fpm_request_info();
+
+	// fcgi_set_fd(SG(server_context),fd);
+
+ //    //输出测试log
+ //    char str[100];
+ //    sprintf(str,"fd:%d",fd);
+ //    test_log(str);
+
+
+
+ //    SG(sapi_headers).http_response_code = 404;
+ //    PUTS("File not found.\n");
+
+ //    // SG(sapi_headers).http_response_code = 200;
+ //    // PUTS("File not found12345666.\n");
+
+ //    // fcgi_write(SG(server_context),FCGI_GET_VALUES_RESULT,"hello",strlen("hello"));
+
+ //    fcgi_finish_request(SG(server_context), 1);
+
+
+
+	/* request startup only after we've done all we can to
+	 *            get path_translated */
+	// if (UNEXPECTED(php_request_startup() == FAILURE)) {
+	// 	fcgi_finish_request(request, 1);
+	// 	SG(server_context) = NULL;
+	// 	php_module_shutdown();
+	// 	return;
+	// }
+
+	// zlog(ZLOG_DEBUG, "Primary script unknown");
+	
+
+	// // php_request_shutdown((void *) 0);
+ //    sapi_cgi_deactivate();
+
+
+
+    //------读取二进制文件内容模拟输出
+    // FILE *pfile;
+    // char *pread;
+    // size_t result;
+    // // pfile=fopen("/Users/sioomy/work/php-src/tests/fpmtext/fpmoutput.txt","rb");
+    // pfile=fopen("/Users/sioomy/work/php-src/tests/fpmtext/t2.txt","rb");
+
+    // fseek(pfile,0,SEEK_END);//将文件内部的指针指向文件末尾
+    // int lsize=ftell(pfile);//获取文件长度
+    // rewind(pfile);//将文件内部的指针重新指向一个流的开头
+
+    // pread=(char *) malloc((lsize+1)*sizeof(char));//申请内存空间，lsize*sizeof(char)是为了更严谨，16位上char占一个字符，其他机器上可能变化
+    // memset(pread,0,lsize*sizeof(char)+1);//将内存空间都赋值为‘\0’
+    
+    // result=fread(pread,sizeof(char),lsize,pfile);//将pfile中内容读入pread指向内存中
+    // send(fd, pread, lsize, 0);
+    // fclose(pfile);
+    // free(pread);
+    // pread=NULL;
+    // close(fd);
+
+
+
+	// return;
+
+
+
+
+    char *primary_script = NULL;
+	request_body_fd = -1;
+	SG(server_context) = (void *) request;
+
+	init_request_info();
+
+	fpm_request_info();
+
+	/* request startup only after we've done all we can to
+	 *            get path_translated */
+	if (UNEXPECTED(php_request_startup() == FAILURE)) {
+		fcgi_finish_request(request, 1);
+		SG(server_context) = NULL;
+		php_module_shutdown();
+		// return FPM_EXIT_SOFTWARE;
+		return;
+	}
+
+	/* check if request_method has been sent.
+	 * if not, it's certainly not an HTTP over fcgi request */
+	if (UNEXPECTED(!SG(request_info).request_method)) {
+		goto fastcgi_request_done2;
+	}
+	if (UNEXPECTED(fpm_status_handle_request())) {
+		goto fastcgi_request_done2;
+	}
+	/* If path_translated is NULL, terminate here with a 404 */
+	if (UNEXPECTED(!SG(request_info).path_translated)) {
+		zend_try {
+			zlog(ZLOG_DEBUG, "Primary script unknown");
+			SG(sapi_headers).http_response_code = 404;
+			PUTS("File not found.\n");
+		} zend_catch {
+		} zend_end_try();
+		goto fastcgi_request_done2;
+	}
+	if (UNEXPECTED(fpm_php_limit_extensions(SG(request_info).path_translated))) {
+		SG(sapi_headers).http_response_code = 403;
+		PUTS("Access denied.\n");
+		goto fastcgi_request_done2;
+	}
+
+	/*
+	 * have to duplicate SG(request_info).path_translated to be able to log errrors
+	 * php_fopen_primary_script seems to delete SG(request_info).path_translated on failure
+	 */
+	primary_script = estrdup(SG(request_info).path_translated);
+
+	// path_translated exists, we can continue ! 
+	if (UNEXPECTED(php_fopen_primary_script(&file_handle) == FAILURE)) {
+		zend_try {
+			zlog(ZLOG_ERROR, "Unable to open primary script: %s (%s)", primary_script, strerror(errno));
+			if (errno == EACCES) {
+				SG(sapi_headers).http_response_code = 403;
+				PUTS("Access denied.\n");
+			} else {
+				SG(sapi_headers).http_response_code = 404;
+				PUTS("No input file specified.\n");
+			}
+		} zend_catch {
+		} zend_end_try();
+		/* we want to serve more requests if this is fastcgi
+		 * so cleanup and continue, request shutdown is
+		 * handled later */
+
+		goto fastcgi_request_done2;
+	}
+
+	fpm_request_executing();
+
+	php_execute_script_coro(&file_handle);
+
+fastcgi_request_done2:
+	if (EXPECTED(primary_script)) {
+		efree(primary_script);
+	}
+
+	if (UNEXPECTED(request_body_fd != -1)) {
+		close(request_body_fd);
+	}
+	request_body_fd = -2;
+
+	if (UNEXPECTED(EG(exit_status) == 255)) {
+		if (CGIG(error_header) && *CGIG(error_header)) {
+			sapi_header_line ctr = {0};
+
+			ctr.line = CGIG(error_header);
+			ctr.line_len = strlen(CGIG(error_header));
+			sapi_header_op(SAPI_HEADER_REPLACE, &ctr);
+		}
+	}
+
+	fpm_request_end();
+	fpm_log_write(NULL);
+
+	efree(SG(request_info).path_translated);
+	SG(request_info).path_translated = NULL;
+
+	php_request_shutdown((void *) 0);
+
+	requests++;
+	if (UNEXPECTED(max_requests && (requests == max_requests))) {
+		fcgi_request_set_keep(request, 0);
+		fcgi_finish_request(request, 0);
+		//break;
+		return;
+	}
+	/* end of fastcgi loop */
+
+
+
+
+
+
+
+}  
+
+
+
 /* {{{ main
  */
 int main(int argc, char *argv[])
@@ -1890,8 +2579,50 @@ consult the installation file that came with this distribution, or visit \n\
 	/* library is already initialized, now init our request */
 	request = fpm_init_request(fcgi_fd);
 
+
+
+
+//-----开始libevent
+	evutil_socket_t listener;
+    struct sockaddr_in sin;
+    struct event_base *base;
+    struct event *listener_event;
+    base = event_base_new();//初始化libevent
+    if (!base)  
+        return FPM_EXIT_SOFTWARE; /*XXXerr*/  
+
+    printf("Event Run 1 ==!!!!!!");
+	zend_first_try {
+		g_accept_arg* arg = malloc(sizeof(g_accept_arg));
+		arg->base = base;
+		arg->request = request;
+		arg->file_handle = file_handle;
+
+		arg->max_requests = max_requests;
+		arg->requests = requests;
+
+	    listener_event = event_new(base, fcgi_fd, EV_READ|EV_PERSIST, do_accept, (void*)arg);
+	    evutil_make_socket_nonblocking(listener);
+
+	    /*XXX check it */  
+	    event_add(listener_event, NULL);
+	    event_base_dispatch(base);
+    } zend_catch {
+		exit_status = FPM_EXIT_SOFTWARE;
+	} zend_end_try();
+
+    printf("Event Run!!!!!!");
+
+//-----结束libevent
+
+
+
+
+
+
 	zend_first_try {
 		while (EXPECTED(fcgi_accept_request(request) >= 0)) {
+
 			char *primary_script = NULL;
 			request_body_fd = -1;
 			SG(server_context) = (void *) request;
@@ -1941,7 +2672,7 @@ consult the installation file that came with this distribution, or visit \n\
 			 */
 			primary_script = estrdup(SG(request_info).path_translated);
 
-			/* path_translated exists, we can continue ! */
+			// path_translated exists, we can continue ! 
 			if (UNEXPECTED(php_fopen_primary_script(&file_handle) == FAILURE)) {
 				zend_try {
 					zlog(ZLOG_ERROR, "Unable to open primary script: %s (%s)", primary_script, strerror(errno));

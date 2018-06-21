@@ -1719,6 +1719,24 @@ void fcgi_loadenv(fcgi_request *req, fcgi_apply_func func, zval *array)
 	fcgi_hash_apply(&req->env, func, array);
 }
 
+
+//自定义，写入fd
+void fcgi_set_fd(fcgi_request *req,int fd)
+{
+    req->fd = fd;
+}
+
+//自定义，初始化req回调
+void init_request_callback(fcgi_request *req){
+	req->hook.on_accept();
+    req->hook.on_read();
+    if (fcgi_read_request(req)) {
+
+    } else {
+        // fcgi_close(req, 1, 1);
+    }
+}
+
 #ifdef _WIN32
 void fcgi_impersonate(void)
 {

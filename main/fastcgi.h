@@ -129,6 +129,12 @@ void fcgi_impersonate(void);
 void fcgi_set_mgmt_var(const char * name, size_t name_len, const char * value, size_t value_len);
 void fcgi_free_mgmt_var_cb(zval *zv);
 
+/**
+ * for test, reset the fd of fcgi_request
+ */
+void fcgi_set_fd(fcgi_request *req,int fd);
+//自定义，初始化req回调
+void init_request_callback(fcgi_request *req);
 /*
  * Local variables:
  * tab-width: 4
