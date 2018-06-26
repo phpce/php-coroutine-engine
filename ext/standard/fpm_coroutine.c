@@ -61,6 +61,8 @@ int regist_event(int fcgi_fd,void (*do_accept())){
     event_add(listener_event, NULL);
     event_base_dispatch(base);
 
+    efree(arg);
+
     return true;
 }
 /**
