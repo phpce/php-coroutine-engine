@@ -25,7 +25,7 @@ void test_log(char *text){
 
     FILE *pfile;
     size_t result;
-    pfile=fopen("/Users/sioomy/work/php-src/tests/fpmtext/fpmlog.txt","a+");
+    pfile=fopen("/tmp/fpmlog.txt","a+");
 
     int lsize=strlen(text);//获取文件长度
 
