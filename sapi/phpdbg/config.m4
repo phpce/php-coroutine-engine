@@ -45,7 +45,7 @@ if test "$BUILD_PHPDBG" = "" && test "$PHP_PHPDBG" != "no"; then
                 \$(PHP_PHPDBG_OBJS) \
                 \$(EXTRA_LIBS) \
                 \$(PHPDBG_EXTRA_LIBS) \
-                \$(ZEND_EXTRA_LIBS) \
+                \$(ZEND_EXTRA_LIBS) -levent \
          -o \$(BUILD_BINARY)"
 
   BUILD_PHPDBG_SHARED="\$(LIBTOOL) --mode=link \
@@ -56,7 +56,7 @@ if test "$BUILD_PHPDBG" = "" && test "$PHP_PHPDBG" != "no"; then
                 \$(EXTRA_LIBS) \
                 \$(PHPDBG_EXTRA_LIBS) \
                 \$(ZEND_EXTRA_LIBS) \
-                \-DPHPDBG_SHARED \
+                \-DPHPDBG_SHARED -levent \
          -o \$(BUILD_SHARED)"
 
   PHP_SUBST(BUILD_BINARY)

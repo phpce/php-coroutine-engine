@@ -19,6 +19,8 @@
 /* $Id$ */
 
 /* FastCGI protocol */
+#ifndef FCGI_H
+#define FCGI_H 1
 
 #define FCGI_VERSION_1 1
 
@@ -143,3 +145,4 @@ void init_request_callback(fcgi_request *req);
  * vim600: sw=4 ts=4 fdm=marker
  * vim<600: sw=4 ts=4
  */
+#endif

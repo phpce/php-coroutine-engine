@@ -1730,11 +1730,7 @@ void fcgi_set_fd(fcgi_request *req,int fd)
 void init_request_callback(fcgi_request *req){
 	req->hook.on_accept();
     req->hook.on_read();
-    if (fcgi_read_request(req)) {
-
-    } else {
-        // fcgi_close(req, 1, 1);
-    }
+    fcgi_read_request(req);
 }
 
 #ifdef _WIN32

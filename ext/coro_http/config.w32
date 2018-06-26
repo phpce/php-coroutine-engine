@@ -1,0 +1,13 @@
+// $Id$
+// vim:ft=javascript
+
+// If your extension references something external, use ARG_WITH
+// ARG_WITH("coro_http", "for coro_http support", "no");
+
+// Otherwise, use ARG_ENABLE
+// ARG_ENABLE("coro_http", "enable coro_http support", "no");
+
+if (PHP_CORO_HTTP != "no") {
+	EXTENSION("coro_http", "coro_http.c", PHP_EXTNAME_SHARED, "/DZEND_ENABLE_STATIC_TSRMLS_CACHE=1");
+}
+

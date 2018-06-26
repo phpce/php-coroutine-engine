@@ -32,6 +32,8 @@
 #endif
 #include <sys/stat.h>
 
+#include "../ext/standard/fpm_coroutine.h"
+
 #define SAPI_OPTION_NO_CHDIR 1
 #define SAPI_POST_BLOCK_SIZE 0x4000
 
@@ -116,7 +118,6 @@ typedef struct {
 	int proto_num;
 } sapi_request_info;
 
-
 typedef struct _sapi_globals_struct {
 	void *server_context;
 	sapi_request_info request_info;
@@ -135,6 +136,7 @@ typedef struct _sapi_globals_struct {
 	HashTable known_post_content_types;
 	zval callback_func;
 	zend_fcall_info_cache fci_cache;
+	sapi_coroutine_info coroutine_info;
 } sapi_globals_struct;
 
 
