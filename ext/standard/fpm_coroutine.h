@@ -35,7 +35,7 @@ typedef struct _php_coroutine_context{
     zend_bool use_heap;
 #endif
     fcgi_request *request;//用于保存请求信息
-    
+
 
 
 }php_coroutine_context;
@@ -52,14 +52,12 @@ typedef struct _php_coroutine_context{
  */
 typedef struct _g_accept_arg{
     struct event_base *base;
-    fcgi_request *request;
-    zend_file_handle* file_handle;
 } g_accept_arg;
 
 
 void test_log(char *text);
 
-int regist_event(zend_file_handle* file_handle,int* exit_status,int fcgi_fd,void (*do_accept()));
+int regist_event(int fcgi_fd,void (*do_accept()));
 
 php_coroutine_context *get_coroutine_context();
 void resume_coroutine_context(php_coroutine_context* context);

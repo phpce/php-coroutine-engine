@@ -182,8 +182,6 @@ ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
 
 ZEND_API int zend_execute_scripts_coro(int type, zval *retval, int file_count, ...) /* {{{ */
 {
-
-
 	va_list files;
 	int i;
 	zend_file_handle *file_handle;
@@ -369,147 +367,152 @@ PHPAPI int php_execute_script_coro(zend_file_handle *primary_file)
 	return retval;
 }
 /* }}} */
-static int le_coroutine_php;
 
 
-#define MAX_LINE 80  
 
-void do_read(evutil_socket_t fd, short events, void *arg);  
-void do_write(evutil_socket_t fd, short events, void *arg);  
+
+
+// static int le_coroutine_php;
+
+
+// #define MAX_LINE 80  
+
+// void do_read(evutil_socket_t fd, short events, void *arg);  
+// void do_write(evutil_socket_t fd, short events, void *arg);  
   
-char rot13_char(char c)  
-{  
-    /* We don't want to use isalpha here; setting the locale would change 
-     * which characters are considered alphabetical. */  
-    if ((c >= 'a' && c <= 'm') || (c >= 'A' && c <= 'M'))  
-        return c + 13;  
-    else if ((c >= 'n' && c <= 'z') || (c >= 'N' && c <= 'Z'))  
-        return c - 13;  
-    else  
-        return c;  
-}  
+// char rot13_char(char c)  
+// {  
+//     /* We don't want to use isalpha here; setting the locale would change 
+//      * which characters are considered alphabetical. */  
+//     if ((c >= 'a' && c <= 'm') || (c >= 'A' && c <= 'M'))  
+//         return c + 13;  
+//     else if ((c >= 'n' && c <= 'z') || (c >= 'N' && c <= 'Z'))  
+//         return c - 13;  
+//     else  
+//         return c;  
+// }  
   
-struct fd_state {  
-    char buffer[MAX_LINE];  
-    size_t buffer_used;  
+// struct fd_state {  
+//     char buffer[MAX_LINE];  
+//     size_t buffer_used;  
   
-    size_t n_written;  
-    size_t write_upto;  
+//     size_t n_written;  
+//     size_t write_upto;  
   
-    struct event *read_event;  
-    struct event *write_event;  
-};  
+//     struct event *read_event;  
+//     struct event *write_event;  
+// };  
   
-struct fd_state * alloc_fd_state(struct event_base *base, evutil_socket_t fd)  
-{  
-    struct fd_state *state = malloc(sizeof(struct fd_state));  
-    if (!state)  
-        return NULL;  
+// struct fd_state * alloc_fd_state(struct event_base *base, evutil_socket_t fd)  
+// {  
+//     struct fd_state *state = malloc(sizeof(struct fd_state));  
+//     if (!state)  
+//         return NULL;  
   
-    state->read_event = event_new(base, fd, EV_READ|EV_PERSIST, do_read, state);  
-    if (!state->read_event)  
-    {  
-        free(state);  
-        return NULL;  
-    }  
+//     state->read_event = event_new(base, fd, EV_READ|EV_PERSIST, do_read, state);  
+//     if (!state->read_event)  
+//     {  
+//         free(state);  
+//         return NULL;  
+//     }  
   
-    state->write_event = event_new(base, fd, EV_WRITE|EV_PERSIST, do_write, state);  
-    if (!state->write_event)  
-    {  
-        event_free(state->read_event);  
-        free(state);  
-        return NULL;  
-    }  
+//     state->write_event = event_new(base, fd, EV_WRITE|EV_PERSIST, do_write, state);  
+//     if (!state->write_event)  
+//     {  
+//         event_free(state->read_event);  
+//         free(state);  
+//         return NULL;  
+//     }  
   
-    state->buffer_used = state->n_written = state->write_upto = 0;  
+//     state->buffer_used = state->n_written = state->write_upto = 0;  
   
-    assert(state->write_event);  
-    return state;  
-}  
+//     assert(state->write_event);  
+//     return state;  
+// }  
   
-void free_fd_state(struct fd_state *state)  
-{  
-    event_free(state->read_event);  
-    event_free(state->write_event);  
-    free(state);  
-}  
+// void free_fd_state(struct fd_state *state)  
+// {  
+//     event_free(state->read_event);  
+//     event_free(state->write_event);  
+//     free(state);  
+// }  
   
-void do_read(evutil_socket_t fd, short events, void *arg)  
-{  
-    struct fd_state *state = arg;  
-    char buf[20];  
-    int i;  
-    ssize_t result;  
-    printf("\ncome in do_read: fd: %d, state->buffer_used: %d, sizeof(state->buffer): %d\n", fd, state->buffer_used, sizeof(state->buffer));  
-    while (1)  
-    {  
-        assert(state->write_event);  
-        result = recv(fd, buf, sizeof(buf), 0);  
-        if (result <= 0)  
-            break;  
-        printf("recv once, fd: %d, recv size: %d, recv buff: %s\n", fd, result, buf);  
+// void do_read(evutil_socket_t fd, short events, void *arg)  
+// {  
+//     struct fd_state *state = arg;  
+//     char buf[20];  
+//     int i;  
+//     ssize_t result;  
+//     printf("\ncome in do_read: fd: %d, state->buffer_used: %d, sizeof(state->buffer): %d\n", fd, state->buffer_used, sizeof(state->buffer));  
+//     while (1)  
+//     {  
+//         assert(state->write_event);  
+//         result = recv(fd, buf, sizeof(buf), 0);  
+//         if (result <= 0)  
+//             break;  
+//         printf("recv once, fd: %d, recv size: %d, recv buff: %s\n", fd, result, buf);  
   
-        for (i=0; i < result; ++i)  
-        {  
-            if (state->buffer_used < sizeof(state->buffer))//如果读事件的缓冲区还未满，将收到的数据做转换  
-                state->buffer[state->buffer_used++] = rot13_char(buf[i]);  
-//              state->buffer[state->buffer_used++] = buf[i];//接收什么发送什么，不经过转换，测试用  
-            if (buf[i] == '\n') //如果遇到换行，添加写事件，并设置写事件的大小  
-            {  
-                assert(state->write_event);  
-                event_add(state->write_event, NULL);  
-                state->write_upto = state->buffer_used;  
-                printf("遇到换行符，state->write_upto: %d, state->buffer_used: %d\n",state->write_upto, state->buffer_used);  
-            }  
-        }  
-        printf("recv once, state->buffer_used: %d\n", state->buffer_used);  
-    }  
-    printf("read ok !!!!\n");
-    //判断最后一次接收的字节数  
-    if (result == 0)  
-    {  
-        free_fd_state(state);  
-    }  
-    else if (result < 0)  
-    {  
-        if (errno == EAGAIN) // XXXX use evutil macro  
-            return;  
-        perror("recv");  
-        free_fd_state(state);  
-    }  
-}  
+//         for (i=0; i < result; ++i)  
+//         {  
+//             if (state->buffer_used < sizeof(state->buffer))//如果读事件的缓冲区还未满，将收到的数据做转换  
+//                 state->buffer[state->buffer_used++] = rot13_char(buf[i]);  
+// //              state->buffer[state->buffer_used++] = buf[i];//接收什么发送什么，不经过转换，测试用  
+//             if (buf[i] == '\n') //如果遇到换行，添加写事件，并设置写事件的大小  
+//             {  
+//                 assert(state->write_event);  
+//                 event_add(state->write_event, NULL);  
+//                 state->write_upto = state->buffer_used;  
+//                 printf("遇到换行符，state->write_upto: %d, state->buffer_used: %d\n",state->write_upto, state->buffer_used);  
+//             }  
+//         }  
+//         printf("recv once, state->buffer_used: %d\n", state->buffer_used);  
+//     }  
+//     printf("read ok !!!!\n");
+//     //判断最后一次接收的字节数  
+//     if (result == 0)  
+//     {  
+//         free_fd_state(state);  
+//     }  
+//     else if (result < 0)  
+//     {  
+//         if (errno == EAGAIN) // XXXX use evutil macro  
+//             return;  
+//         perror("recv");  
+//         free_fd_state(state);  
+//     }  
+// }  
   
-void do_write(evutil_socket_t fd, short events, void *arg)  
-{  
-    struct fd_state *state = arg;  
+// void do_write(evutil_socket_t fd, short events, void *arg)  
+// {  
+//     struct fd_state *state = arg;  
   
-    printf("\ncome in do_write, fd: %d, state->n_written: %d, state->write_upto: %d\n",fd, state->n_written, state->write_upto);  
-    while (state->n_written < state->write_upto)  
-    {  
-        ssize_t result = send(fd, state->buffer + state->n_written, state->write_upto - state->n_written, 0);  
-        if (result < 0) {  
-            if (errno == EAGAIN) // XXX use evutil macro  
-                return;  
-            free_fd_state(state);  
-            return;  
-        }  
-        assert(result != 0);  
+//     printf("\ncome in do_write, fd: %d, state->n_written: %d, state->write_upto: %d\n",fd, state->n_written, state->write_upto);  
+//     while (state->n_written < state->write_upto)  
+//     {  
+//         ssize_t result = send(fd, state->buffer + state->n_written, state->write_upto - state->n_written, 0);  
+//         if (result < 0) {  
+//             if (errno == EAGAIN) // XXX use evutil macro  
+//                 return;  
+//             free_fd_state(state);  
+//             return;  
+//         }  
+//         assert(result != 0);  
   
-        state->n_written += result;  
-        printf("send fd: %d, send size: %d, state->n_written: %d\n", fd, result, state->n_written);  
-    }  
+//         state->n_written += result;  
+//         printf("send fd: %d, send size: %d, state->n_written: %d\n", fd, result, state->n_written);  
+//     }  
   
-    if (state->n_written == state->buffer_used)  
-    {  
-        printf("state->n_written == state->buffer_used: %d\n", state->n_written);  
-        state->n_written = state->write_upto = state->buffer_used = 1;  
-        printf("state->n_written = state->write_upto = state->buffer_used = 1\n");  
-        printf("close !!\n");
-        close(fd);
-    }  
+//     if (state->n_written == state->buffer_used)  
+//     {  
+//         printf("state->n_written == state->buffer_used: %d\n", state->n_written);  
+//         state->n_written = state->write_upto = state->buffer_used = 1;  
+//         printf("state->n_written = state->write_upto = state->buffer_used = 1\n");  
+//         printf("close !!\n");
+//         close(fd);
+//     }  
   
-    event_del(state->write_event);  
-}
+//     event_del(state->write_event);  
+// }
 
 // coroutine end ====
 
@@ -2018,22 +2021,14 @@ void close_request(){
 
 void do_accept(evutil_socket_t listener, short event, void *arg)  
 {  
-
-	zlog(ZLOG_DEBUG, "do_accept run!!!!!!");
     struct event_base *base = ((g_accept_arg*) arg)->base;  
     struct sockaddr_storage ss;  
     socklen_t slen = sizeof(ss);  
     int fd = accept(listener, (struct sockaddr*)&ss, &slen);  
-
-    // fcgi_request *request = ((g_accept_arg*) arg)->request;
    
-    zend_file_handle file_handle = *((g_accept_arg*) arg)->file_handle;
-
-
-
-    //声明私有的request
-    fcgi_request *request;
-    request = fpm_init_request(fd);//初始化request
+    //上下文内私有
+    zend_file_handle file_handle; 
+    fcgi_request *request = fpm_init_request(fd);//初始化request
 
     init_coroutine_context(request);//初始化context
 
@@ -2465,7 +2460,7 @@ consult the installation file that came with this distribution, or visit \n\
 
     //-----开始libevent
     zend_first_try {
-        int r = regist_event(&file_handle,&exit_status,fcgi_fd,do_accept);
+        int r = regist_event(fcgi_fd,do_accept);
 
         // fcgi_destroy_request(request);
         fcgi_shutdown();

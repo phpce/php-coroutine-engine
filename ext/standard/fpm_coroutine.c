@@ -37,39 +37,30 @@ void test_log(char *text){
 /**
  * 注册libevent
  */
-int regist_event(zend_file_handle* file_handle,int* exit_status,int fcgi_fd,void (*do_accept())){
-	evutil_socket_t listener;
-    struct sockaddr_in sin;
+int regist_event(int fcgi_fd,void (*do_accept())){
     struct event_base *base;
     struct event *listener_event;
     base = event_base_new();//初始化libevent
     if (!base)  
-        return false; /*XXXerr*/  
-
-    
-    printf("Event Run 1 ==!!!!!!");
+        return false; //libevent 初始化失败  
 
 	g_accept_arg* arg = malloc(sizeof(g_accept_arg));
 	arg->base = base;
-	// arg->request = request;
-	arg->file_handle = file_handle;
 
     //set coroutineinfo
     init_coroutine_info();
     SG(coroutine_info).base = base;
     SG(coroutine_info).fcgi_fd = fcgi_fd;
 
-    SG(coroutine_info).test_log("=========test test_log  =====run \n");
-    
+    SG(coroutine_info).test_log("========= libevent base loop start ===== \n");
 
     listener_event = event_new(base, fcgi_fd, EV_READ|EV_PERSIST, do_accept, (void*)arg);
-    evutil_make_socket_nonblocking(listener);
+    // evutil_make_socket_nonblocking(fcgi_fd);//todo 这里可能会有问题,造成不稳定
 
-    /*XXX check it */  
+    /* 添加事件 */  
     event_add(listener_event, NULL);
     event_base_dispatch(base);
 
-    printf("Event Run!!!!!!");
     return true;
 }
 /**
@@ -98,6 +89,8 @@ void write_coroutine_context(php_coroutine_context *context){
     context->vm_stack = EG(vm_stack);
     context->vm_stack_top = EG(vm_stack_top);
     context->vm_stack_end = EG(vm_stack_end);
+
+    //todo 需要研究一下scoreboard，是否需要将里面的部分变量写入context
 }
 
 void resume_coroutine_context(php_coroutine_context* context){
