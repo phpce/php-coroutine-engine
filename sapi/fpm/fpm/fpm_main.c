@@ -124,7 +124,7 @@ ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
 	if (EG(exception) != NULL) {
 		return;
 	}
-    php_coroutine_context* context = get_coroutine_context();
+    sapi_coroutine_context* context = SG(coroutine_info).context;
 
     context->op_array = op_array;
 
@@ -156,9 +156,9 @@ ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
     test_log("defulet run \n");
     int r = setjmp(*context->buf_ptr);
 
-    char str[100];
-    sprintf(str,"buf_ptr:%d\n",context->buf_ptr);
-    test_log(str);
+    char t[200];
+    sprintf(t,"====111=zend_execute_coro:%d,*buf_ptr:%d\n",SG(coroutine_info).context,*context->buf_ptr);
+    test_log(t);
 
     if(r == CORO_DEFAULT){//first run
         test_log("jump set core_default \n");
@@ -169,10 +169,10 @@ ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
         // EG(vm_stack) = g_coro_stack.vm_stack;
         // EG(vm_stack_top) = g_coro_stack.vm_stack_top;
         // EG(vm_stack_end) = g_coro_stack.vm_stack_end;
-        free_coroutine_context(context);
+        // free_coroutine_context(context);
     }else{
         test_log("first run code yield \n");
-        longjmp(context->req_ptr,CORO_YIELD);
+        longjmp(*context->req_ptr,CORO_YIELD);
     }
 
     // zend_execute_ex(context->execute_data);
@@ -240,7 +240,7 @@ void free_old_cwd(char *old_cwd,zend_bool use_heap){
  */
 PHPAPI int php_execute_script_coro(zend_file_handle *primary_file)
 {
-    php_coroutine_context* context = get_coroutine_context();
+    sapi_coroutine_context* context = SG(coroutine_info).context;
 	zend_file_handle *prepend_file_p, *append_file_p;
 	zend_file_handle prepend_file = {{0}, NULL, NULL, 0, 0}, append_file = {{0}, NULL, NULL, 0, 0};
 #if HAVE_BROKEN_GETCWD
@@ -352,18 +352,18 @@ PHPAPI int php_execute_script_coro(zend_file_handle *primary_file)
 		} zend_end_try();
 	}
 
-#if HAVE_BROKEN_GETCWD
-	if (old_cwd_fd != -1) {
-		fchdir(old_cwd_fd);
-		close(old_cwd_fd);
-	}
-#else
-    free_old_cwd(context->old_cwd,context->use_heap);
-	// if (old_cwd[0] != '\0') {
-	// 	php_ignore_value(VCWD_CHDIR(old_cwd));
-	// }
-	// free_alloca(old_cwd, use_heap);
-#endif
+// #if HAVE_BROKEN_GETCWD
+// 	if (old_cwd_fd != -1) {
+// 		fchdir(old_cwd_fd);
+// 		close(old_cwd_fd);
+// 	}
+// #else
+//     free_old_cwd(context->old_cwd,context->use_heap);
+// 	// if (old_cwd[0] != '\0') {
+// 	// 	php_ignore_value(VCWD_CHDIR(old_cwd));
+// 	// }
+// 	// free_alloca(old_cwd, use_heap);
+// #endif
 	return retval;
 }
 /* }}} */
@@ -1985,6 +1985,16 @@ static zend_module_entry cgi_module_entry = {
 	STANDARD_MODULE_PROPERTIES
 };
 
+void init_request(void *request){
+    SG(server_context) = request;
+    init_request_info();//初始化request_info
+    fpm_request_info();//初始化   fpm_scoreboard_proc_s
+
+    char t[200];
+    sprintf(t,"====init_request  fcgi_get_fd:%d,\n",fcgi_get_fd(request));//设置libevnet fd);
+    test_log(t);
+}
+
 void close_request(){
     if (UNEXPECTED(request_body_fd != -1)) {
         close(request_body_fd);
@@ -2021,33 +2031,39 @@ void close_request(){
 
 void do_accept(evutil_socket_t listener, short event, void *arg)  
 {  
-    struct event_base *base = ((g_accept_arg*) arg)->base;  
+    struct event_base *base = arg;  
     struct sockaddr_storage ss;  
     socklen_t slen = sizeof(ss);  
     int fd = accept(listener, (struct sockaddr*)&ss, &slen);  
+
+
+
+    char a[200];
+    sprintf(a,"========= do_accept ---fd:%d ===== \n",fd);
+    SG(coroutine_info).test_log(a);
+
+
    
     //上下文内私有
     zend_file_handle file_handle; 
     fcgi_request *request = fpm_init_request(fd);//初始化request
 
-    init_coroutine_context(request);//初始化context
-
     fcgi_set_fd(request,fd);//设置libevnet fd
     
     //初始化回调函数（来源于）while (EXPECTED(fcgi_accept_request(request) >= 0))
-    init_request_callback(request);
-    
-
+    init_request_callback(request);//初始化request回调，fpm_init_request中设置的
 
     char *primary_script = NULL;
 	request_body_fd = -1;
-	SG(server_context) = (void *) request;
+	
 
-    SG(coroutine_info).close_request = close_request;
+    SG(coroutine_info).close_request = close_request;//请求关闭的回调函数
+    SG(coroutine_info).init_request = init_request;//请求关闭的回调函数
 
-	init_request_info();//初始化request_info
-
-	fpm_request_info();//初始化   fpm_scoreboard_proc_s
+    SG(coroutine_info).init_request((void*)request);
+ //    SG(server_context) = (void *) request;
+	// init_request_info();//初始化request_info
+	// fpm_request_info();//初始化   fpm_scoreboard_proc_s
 
 	/* request startup only after we've done all we can to
 	 *            get path_translated */
@@ -2116,9 +2132,12 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
 
 	fpm_request_executing();//proc->request_stage  改变状态FPM_REQUEST_EXECUTING
 
-    int r = setjmp(SG(coroutine_info).context->req_ptr);
+    init_coroutine_context(request);//初始化context ，一定要在这里。在执行代码前顺便保存上下文信息
+
+    int r = setjmp(*SG(coroutine_info).context->req_ptr);
     if(r == CORO_DEFAULT){
         php_execute_script_coro(&file_handle);//执行代码
+        // free_coroutine_context(SG(coroutine_info).context);
         goto fastcgi_request_done2;
     }else if(r == CORO_YIELD){
         test_log("reqest yield \n");
@@ -2128,8 +2147,8 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
 fastcgi_request_done2:
 	
     close_request();
-	
 
+    free_coroutine_context(SG(coroutine_info).context);
 }  
 
 
@@ -2471,14 +2490,14 @@ consult the installation file that came with this distribution, or visit \n\
         if (cgi_sapi_module.ini_entries) {
             free(cgi_sapi_module.ini_entries);
         }
-     } zend_catch {
+    } zend_catch {
         exit_status = FPM_EXIT_SOFTWARE;
     } zend_end_try();
     //-----结束libevent
 
 
 // 	zend_first_try {
-//		while (EXPECTED(fcgi_accept_request(request) >= 0)) {
+// 		while (EXPECTED(fcgi_accept_request(request) >= 0)) {
 
 // 			char *primary_script = NULL;
 // 			request_body_fd = -1;
@@ -2601,6 +2620,13 @@ consult the installation file that came with this distribution, or visit \n\
 // 	} zend_catch {
 // 		exit_status = FPM_EXIT_SOFTWARE;
 // 	} zend_end_try();
+
+
+
+
+
+
+
 
 out:
 
