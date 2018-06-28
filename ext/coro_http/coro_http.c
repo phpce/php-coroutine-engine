@@ -61,24 +61,14 @@ ZEND_DECLARE_MODULE_GLOBALS(coro_http)
 static int le_coro_http;
 
 
-
-
-
-
-
-
-
 void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
 {
 
     char tempstr[200];
     sprintf(tempstr,"RemoteReadCallback\n");
     SG(coroutine_info).test_log(tempstr);
-    // event_base_loopexit((struct event_base*)arg, NULL);
-
-    SG(coroutine_info).resume_coroutine_context(SG(coroutine_info).context);
-
-} 
+    SG(coroutine_info).resume_coroutine_context(arg);
+}
 
 int ReadHeaderDoneCallback(struct evhttp_request* remote_rsp, void* arg)
 {
@@ -94,7 +84,6 @@ int ReadHeaderDoneCallback(struct evhttp_request* remote_rsp, void* arg)
     }
     fprintf(stderr, "< \n");
 
-    sprintf(tempstr,"ReadHeaderDoneCallback\n");
     SG(coroutine_info).test_log(tempstr);
     return 0;
 }
@@ -111,27 +100,18 @@ void ReadChunkCallback(struct evhttp_request* remote_rsp, void* arg)
     }
 
     char tempstr[200];
-    sprintf(tempstr,"ReadChunkCallback\n");
     SG(coroutine_info).test_log(tempstr);
 }
 
 void RemoteRequestErrorCallback(enum evhttp_request_error error, void* arg)
 {
-    char tempstr[200];
-    sprintf(tempstr,"request failed\n");
-    SG(coroutine_info).test_log(tempstr);
     // event_base_loopexit((struct event_base*)arg, NULL);
 }
 
 void RemoteConnectionCloseCallback(struct evhttp_connection* connection, void* arg)
 {
-    char tempstr[200];
-    sprintf(tempstr,"remote connection closed\n");
-    SG(coroutine_info).test_log(tempstr);
     // event_base_loopexit((struct event_base*)arg, NULL);
 }
-
-
 
 /* {{{ PHP_INI
  */
@@ -153,11 +133,13 @@ PHP_INI_END()
 PHP_FUNCTION(coro_http_get)
 {
 
-    SG(coroutine_info).test_log("php_core_yield ------- run \n");
-
     char tempstr[200];
 
-    char* url = "http://live.ksmobile.net/base/apiend";
+    sprintf(tempstr,"======= coro_http_get start =========!\n");
+    SG(coroutine_info).test_log(tempstr);
+
+    // char* url = "http://live.ksmobile.net/base/apiend";
+    char* url = "http://127.0.0.1:8080/";
     struct evhttp_uri* uri = evhttp_uri_parse(url);
     if (!uri)
     {
@@ -183,7 +165,9 @@ PHP_FUNCTION(coro_http_get)
     }
     assert(dnsbase);
 
-    struct evhttp_request* request = evhttp_request_new(RemoteReadCallback, base);
+
+
+    struct evhttp_request* request = evhttp_request_new(RemoteReadCallback, SG(coroutine_info).context);
     evhttp_request_set_header_cb(request, ReadHeaderDoneCallback);
     evhttp_request_set_chunked_cb(request, ReadChunkCallback);
     evhttp_request_set_error_cb(request, RemoteRequestErrorCallback);
@@ -221,13 +205,16 @@ PHP_FUNCTION(coro_http_get)
     evhttp_connection_set_closecb(connection, RemoteConnectionCloseCallback, base);
 
     evhttp_add_header(evhttp_request_get_output_headers(request), "Host", host);
+
+    sprintf(tempstr,"======= coro_http_get evhttp_make_request =========!\n");
+    SG(coroutine_info).test_log(tempstr);
+
     evhttp_make_request(connection, request, EVHTTP_REQ_GET, request_url);
 
     // event_base_dispatch(base);
 
     //yield 切出
     SG(coroutine_info).yield_coroutine_context();
-
 
     RETURN_TRUE;
 }
