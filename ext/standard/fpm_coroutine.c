@@ -185,7 +185,14 @@ void resume_coroutine_context(sapi_coroutine_context* context){
             zend_exception_error(EG(exception), E_ERROR);
         }
 
-
+#if HAVE_BROKEN_GETCWD
+        if ((int)*context->old_cwd_fd != -1) {
+            fchdir(*context->old_cwd_fd);
+            close(*context->old_cwd_fd);
+        }
+#else
+        SG(coroutine_info).free_old_cwd(context->old_cwd,context->use_heap);
+#endif
 
         //from php_execute_script_coro ,处理异常
         if (EG(exception)) {
@@ -199,7 +206,7 @@ void resume_coroutine_context(sapi_coroutine_context* context){
 
         SG(coroutine_info).close_request();
 
-        // free_coroutine_context(SG(coroutine_info).context);
+        free_coroutine_context(SG(coroutine_info).context);
 
     }else{
         test_log("resume code yield \n");
@@ -265,15 +272,14 @@ void free_coroutine_context(sapi_coroutine_context* context){
         // efree_size(context->op_array, sizeof(zend_op_array));
 
         test_log("free === 4 ===\n");
-#if HAVE_BROKEN_GETCWD
-        if ((int)*context->old_cwd_fd != -1) {
-            fchdir(*context->old_cwd_fd);
-            close(*context->old_cwd_fd);
-        }
-#else
-        test_log(context->old_cwd);
-        SG(coroutine_info).free_old_cwd(context->old_cwd,context->use_heap);
-#endif
+// #if HAVE_BROKEN_GETCWD
+//         if ((int)*context->old_cwd_fd != -1) {
+//             fchdir(*context->old_cwd_fd);
+//             close(*context->old_cwd_fd);
+//         }
+// #else
+//         SG(coroutine_info).free_old_cwd(context->old_cwd,context->use_heap);
+// #endif
 
         test_log("free === 5 ===\n");
         // efree(context);
