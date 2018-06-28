@@ -31,8 +31,9 @@
 #include "win32/php_stdint.h"
 #endif
 #include <sys/stat.h>
+#include "fastcgi.h"
 
-#include "../ext/standard/fpm_coroutine.h"
+
 
 #define SAPI_OPTION_NO_CHDIR 1
 #define SAPI_POST_BLOCK_SIZE 0x4000
@@ -117,6 +118,49 @@ typedef struct {
 	char **argv;
 	int proto_num;
 } sapi_request_info;
+
+typedef struct _sapi_coroutine_context{
+    jmp_buf *buf_ptr;
+    jmp_buf *req_ptr;
+    zend_execute_data *execute_data;
+    zend_op_array *op_array;
+    zend_execute_data *prev_execute_data;//execute for execute before yield
+    struct _sapi_coroutine_context *next;
+    struct _sapi_coroutine_context *prev;
+    int coro_state;
+    zend_vm_stack vm_stack;
+    zval* vm_stack_top;
+    zval* vm_stack_end;
+    zend_fcall_info_cache* func_cache;
+    zval *ret;
+    //请求过程中用到的全局变量
+#if HAVE_BROKEN_GETCWD
+    volatile int *old_cwd_fd;
+#else
+    char *old_cwd;
+    zend_bool use_heap;
+#endif
+    fcgi_request *request;
+    sapi_headers_struct sapi_headers;//用于保存sapi headers
+    sapi_request_info request_info;
+
+} sapi_coroutine_context;
+
+/**
+ * 用于存储coroutine libevent
+ */
+typedef struct _g_sapi_coroutine_info{
+    struct event_base *base;
+    int fcgi_fd;
+    sapi_coroutine_context* context;//全局当前context
+    int context_count;//全局context链表中context数量
+    void(*test_log)(char *text);//output test log
+    void(*resume_coroutine_context)(sapi_coroutine_context* context);
+    void(*yield_coroutine_context)();
+    void(*close_request)();
+    void(*init_request)(void *request);
+    void(*free_old_cwd)(char *old_cwd,zend_bool use_heap);
+} sapi_coroutine_info;
 
 typedef struct _sapi_globals_struct {
 	void *server_context;
