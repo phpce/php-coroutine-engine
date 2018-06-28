@@ -1726,6 +1726,12 @@ void fcgi_set_fd(fcgi_request *req,int fd)
     req->fd = fd;
 }
 
+//自定义，写入fd
+int fcgi_get_fd(fcgi_request *req)
+{
+    return req->fd;
+}
+
 //自定义，初始化req回调
 void init_request_callback(fcgi_request *req){
 	req->hook.on_accept();
