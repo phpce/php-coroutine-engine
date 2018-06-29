@@ -205,7 +205,7 @@ void resume_coroutine_context(sapi_coroutine_context* context){
         test_log("resume done \n");
 
         SG(coroutine_info).close_request();
-
+        test_log("close done \n");
         free_coroutine_context(SG(coroutine_info).context);
 
     }else{
