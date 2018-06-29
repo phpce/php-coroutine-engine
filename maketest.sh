@@ -5,4 +5,5 @@
 # Created Time: 四  6/21 16:15:12 2018
 #########################################################################
 #!/bin/bash
-./configure --prefix=/usr/local/php7 --enable-fpm && make && make install && sudo killall php-fpm && sudo /usr/local/php7/sbin/php-fpm
+#./configure --enable-debug --prefix=/usr/local/php7 --enable-fpm && make && make install && sudo killall php-fpm&& sudo /usr/local/php7/sbin/php-fpm
+./configure --enable-debug --prefix=/usr/local/php7 --enable-fpm && make && make install && sudo gdb /usr/local/php7/sbin/php-fpm
