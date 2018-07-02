@@ -170,7 +170,6 @@ ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
     }
 
     // zend_execute_ex(context->execute_data);
-    // 
 	
 }
 
@@ -322,7 +321,6 @@ PHPAPI int php_execute_script_coro(zend_file_handle *primary_file)
 		   save it and restore after prepend file been executed.
 		 */
 		if (CG(start_lineno) && prepend_file_p) {
-			// zlog(ZLOG_DEBUG, "request prepend file file count 1/2 =============\n\n");
 
 			int orig_start_lineno = CG(start_lineno);
 
@@ -332,8 +330,6 @@ PHPAPI int php_execute_script_coro(zend_file_handle *primary_file)
 				retval = (zend_execute_scripts_coro(ZEND_REQUIRE, NULL, 2, primary_file, append_file_p) == SUCCESS);
 			}
 		} else {
-
-			// zlog(ZLOG_DEBUG, "request prepend file file count 3 =============\n\n");
 
 			retval = (zend_execute_scripts_coro(ZEND_REQUIRE, NULL, 3, prepend_file_p, primary_file, append_file_p) == SUCCESS);
 		}

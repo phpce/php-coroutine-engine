@@ -38,71 +38,25 @@ void test_log(char *text){
 int regist_event(int fcgi_fd,void (*do_accept())){
 
     init_coroutine_info();
-    evutil_socket_t listener;
-    struct sockaddr_in sin;
+
     struct event_base *base;
     struct event *listener_event;
     base = event_base_new();//初始化libevent
     if (!base)  
-        return false; /*XXXerr*/  
-    sin.sin_family = AF_INET;  
-    sin.sin_addr.s_addr = 0;//本机  
-    sin.sin_port = htons(9002); 
-    listener = socket(AF_INET, SOCK_STREAM, 0);
-    if (bind(listener, (struct sockaddr*)&sin, sizeof(sin)) < 0)  
-    {  
-        php_printf("bind");  
-        return false;  
-　　 }
-
-    if (listen(listener, 16)<0)  
-　　 {  
-　　     php_printf("listen");  
-　　     return false;  
-　　 }
+        return false; //libevent 初始化失败  
 
     //set coroutineinfo
     SG(coroutine_info).base = base;
-    SG(coroutine_info).fcgi_fd = listener;
+    SG(coroutine_info).fcgi_fd = fcgi_fd;
 
-    char a[200];
-    sprintf(a,"========= libevent base loop start ---fcgi_fd:%d ===== \n",listener);
-    SG(coroutine_info).test_log(a);
+    SG(coroutine_info).test_log("========= libevent base loop START ===== \n");
 
-    listener_event = event_new(base, listener, EV_READ|EV_PERSIST, do_accept, (void*)base);
-    evutil_make_socket_nonblocking(listener);
+    listener_event = event_new(base, fcgi_fd, EV_READ|EV_PERSIST, do_accept, base);
+    evutil_make_socket_nonblocking(fcgi_fd);
+
     /* 添加事件 */  
     event_add(listener_event, NULL);
-    // event_base_dispatch(base);
-    event_base_loop(base,0);
-
-
-
-
-    // init_coroutine_info();
-
-    // struct event_base *base;
-    // struct event *listener_event;
-    // base = event_base_new();//初始化libevent
-    // if (!base)  
-    //     return false; //libevent 初始化失败  
-
-    // //set coroutineinfo
-    // SG(coroutine_info).base = base;
-    // SG(coroutine_info).fcgi_fd = fcgi_fd;
-
-    // char a[200];
-    // sprintf(a,"========= libevent base loop start ---fcgi_fd:%d ===== \n",fcgi_fd);
-    // SG(coroutine_info).test_log(a);
-
-    // listener_event = event_new(base, fcgi_fd, EV_READ|EV_PERSIST, do_accept, base);
-    // evutil_make_socket_nonblocking(fcgi_fd);
-
-    // /* 添加事件 */  
-    // event_add(listener_event, NULL);
-    // // event_base_dispatch(base);
-    // event_base_loop(base,0);
-    // SG(coroutine_info).test_log("========= libevent base loop done ===== \n");
+    event_base_dispatch(base);
 
     return true;
 }
@@ -142,12 +96,6 @@ void write_coroutine_context(sapi_coroutine_context *context){
     context->vm_stack_top = EG(vm_stack_top);
     context->vm_stack_end = EG(vm_stack_end);
 
-
-
-    // SG(server_context) = (void *)context->request;//load request
-    // SG(coroutine_info).init_request((void *)context->request);
-
-
     //todo 需要研究一下scoreboard，是否需要将里面的部分变量写入context
 
     context->sapi_headers = SG(sapi_headers);
@@ -163,12 +111,6 @@ void write_coroutine_context(sapi_coroutine_context *context){
 }
 
 void resume_coroutine_context(sapi_coroutine_context* context){
-
-    char t[200];
-    sprintf(t,"====111=resume_coroutine_context:%d,*buf_ptr:%d,context_count:%d\n",context,*context->buf_ptr,SG(coroutine_info).context_count);
-    test_log(t);
-
-    
 
     int r = setjmp(*context->buf_ptr);//yield之后的代码段，设置起始标记
     if(r == CORO_DEFAULT){//继续
@@ -206,11 +148,7 @@ void resume_coroutine_context(sapi_coroutine_context* context){
             } zend_end_try();
         }
 
-
-        test_log("resume done \n");
-
         SG(coroutine_info).close_request();
-        test_log("close done \n");
         free_coroutine_context(SG(coroutine_info).context);
 
     }else{
@@ -220,20 +158,11 @@ void resume_coroutine_context(sapi_coroutine_context* context){
 
 void yield_coroutine_context(){
 
-    test_log("=========== yield =========\n");
-
-    
-
     sapi_coroutine_context* context = SG(coroutine_info).context;
     context->coro_state = CORO_YIELD;
 
     context->prev_execute_data = EG(current_execute_data)->prev_execute_data;
     write_coroutine_context(SG(coroutine_info).context);
-
-
-    char t[200];
-    sprintf(t,"====111=yield_coroutine_context:%d,*buf_ptr:%d,context_count:%d\n",SG(coroutine_info).context,*context->buf_ptr,SG(coroutine_info).context_count);
-    test_log(t);
 
     longjmp(*context->buf_ptr,CORO_YIELD);
 }
@@ -363,8 +292,6 @@ void init_coroutine_context(fcgi_request *request){
 
 
 void init_coroutine_info(){
-    // sapi_coroutine_info* corotine_info = emalloc(sizeof(sapi_coroutine_info));
-    // SG(coroutine_info) = *corotine_info;
     SG(coroutine_info).base = NULL;
     SG(coroutine_info).fcgi_fd = NULL;
     SG(coroutine_info).context_count = 0;
