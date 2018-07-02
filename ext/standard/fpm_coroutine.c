@@ -118,11 +118,21 @@ void load_coroutine_context(sapi_coroutine_context *context){
     EG(vm_stack_end) = context->vm_stack_end;
 
     // SG(server_context) = (void *)context->request;//load request
-    SG(coroutine_info).init_request((void *)context->request);
+    EG(current_execute_data) = context->prev_execute_data;
 
 
+    SG(coroutine_info).init_request((void *)context->request);//=====tmp
     SG(sapi_headers) = context->sapi_headers;
-    SG(request_info) = context->request_info;
+
+
+
+    // SG(request_info) = context->request_info;
+
+    // EG(symbol_table) = *context->execute_data->symbol_table;
+
+    // EG(symbol_table) = context->symbol_table;
+
+    // zend_hash_copy(&EG(symbol_table),&context->symbol_table,NULL);
 
 }
 
@@ -133,6 +143,7 @@ void write_coroutine_context(sapi_coroutine_context *context){
     context->vm_stack_end = EG(vm_stack_end);
 
 
+
     // SG(server_context) = (void *)context->request;//load request
     // SG(coroutine_info).init_request((void *)context->request);
 
@@ -140,7 +151,14 @@ void write_coroutine_context(sapi_coroutine_context *context){
     //todo 需要研究一下scoreboard，是否需要将里面的部分变量写入context
 
     context->sapi_headers = SG(sapi_headers);
-    context->request_info = SG(request_info);
+    // context->request_info = SG(request_info);
+
+    // *context->execute_data->symbol_table = EG(symbol_table);
+
+    // context->symbol_table = EG(symbol_table);
+
+    // zend_hash_copy(&context->symbol_table,&EG(symbol_table),NULL);
+
 
 }
 
@@ -150,34 +168,21 @@ void resume_coroutine_context(sapi_coroutine_context* context){
     sprintf(t,"====111=resume_coroutine_context:%d,*buf_ptr:%d,context_count:%d\n",context,*context->buf_ptr,SG(coroutine_info).context_count);
     test_log(t);
 
+    
+
     int r = setjmp(*context->buf_ptr);//yield之后的代码段，设置起始标记
     if(r == CORO_DEFAULT){//继续
 
-        
+        zend_vm_stack_free_args(context->prev_execute_data);
+        zend_vm_stack_free_call_frame(context->prev_execute_data);
 
-        // zend_vm_stack_free_args(context->execute_data);
-        // zend_vm_stack_free_call_frame(context->execute_data);
-
-
-
-        // EG(vm_stack) = context->current_vm_stack;
-        // EG(vm_stack_top) = context->current_vm_stack_top;
-        // EG(vm_stack_end) = context->current_vm_stack_end;
+        init_executor();
 
         load_coroutine_context(context);
-        EG(current_execute_data) = context->execute_data;
         EG(current_execute_data)->opline++;
-
-
 
         zend_execute_ex(EG(current_execute_data));
         context->coro_state = CORO_END;
-        //return vm stack
-        // EG(vm_stack) = g_coro_stack.vm_stack;
-        // EG(vm_stack_top) = g_coro_stack.vm_stack_top;
-        // EG(vm_stack_end) = g_coro_stack.vm_stack_end;
-
-
 
         zend_exception_restore();
         zend_try_exception_handler();
@@ -222,8 +227,10 @@ void yield_coroutine_context(){
     sapi_coroutine_context* context = SG(coroutine_info).context;
     context->coro_state = CORO_YIELD;
 
-
+    context->prev_execute_data = EG(current_execute_data)->prev_execute_data;
     write_coroutine_context(SG(coroutine_info).context);
+
+
     char t[200];
     sprintf(t,"====111=yield_coroutine_context:%d,*buf_ptr:%d,context_count:%d\n",SG(coroutine_info).context,*context->buf_ptr,SG(coroutine_info).context_count);
     test_log(t);
@@ -235,6 +242,7 @@ void yield_coroutine_context(){
  * 释放上下文  todo 内存泄漏，需要进一步处理
  */
 void free_coroutine_context(sapi_coroutine_context* context){
+    return;
 
     if(SG(coroutine_info).context_count>0){
 
@@ -254,7 +262,7 @@ void free_coroutine_context(sapi_coroutine_context* context){
 
         // efree(context->buf_ptr);
         // efree(context->req_ptr);
-        // test_log("free === 1.4 ===\n");
+        test_log("free === 1.4 ===\n");
         // context->buf_ptr = NULL;
         // context->req_ptr = NULL;
 
@@ -268,18 +276,10 @@ void free_coroutine_context(sapi_coroutine_context* context){
 
         test_log("free === 3 ===\n");
 
-        // destroy_op_array(context->op_array);
-        // efree_size(context->op_array, sizeof(zend_op_array));
+        destroy_op_array(context->op_array);
+        efree_size(context->op_array, sizeof(zend_op_array));
 
         test_log("free === 4 ===\n");
-// #if HAVE_BROKEN_GETCWD
-//         if ((int)*context->old_cwd_fd != -1) {
-//             fchdir(*context->old_cwd_fd);
-//             close(*context->old_cwd_fd);
-//         }
-// #else
-//         SG(coroutine_info).free_old_cwd(context->old_cwd,context->use_heap);
-// #endif
 
         test_log("free === 5 ===\n");
         // efree(context);
@@ -340,8 +340,13 @@ void init_coroutine_context(fcgi_request *request){
 
     SG(coroutine_info).context = context;
 
+
+
+
     context->sapi_headers = SG(sapi_headers);
     context->request_info = SG(request_info);
+
+
 
     // //独立指针的内存(这里应该是用不到。mimetype http_status_line应该是未被声明)
     // context->sapi_headers.mimetype = emalloc(sizeof(SG(sapi_headers).mimetype));

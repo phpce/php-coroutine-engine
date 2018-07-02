@@ -125,6 +125,7 @@ typedef struct _sapi_coroutine_context{
     zend_execute_data *execute_data;
     zend_op_array *op_array;
     zend_execute_data *prev_execute_data;//execute for execute before yield
+    zend_array symbol_table;
     struct _sapi_coroutine_context *next;
     struct _sapi_coroutine_context *prev;
     int coro_state;

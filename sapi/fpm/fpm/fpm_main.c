@@ -22,7 +22,6 @@
 */
 
 /* $Id: cgi_main.c 291497 2009-11-30 14:43:22Z dmitry $ */
-
 #include "php.h"
 #include "php_globals.h"
 #include "php_variables.h"
@@ -139,11 +138,11 @@ ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
 
 	context->execute_data = zend_vm_stack_push_call_frame(ZEND_CALL_TOP_CODE | ZEND_CALL_HAS_SYMBOL_TABLE,
 		(zend_function*)op_array, 0, zend_get_called_scope(EG(current_execute_data)), zend_get_this_object(EG(current_execute_data)));
-	if (EG(current_execute_data)) {
-		context->execute_data->symbol_table = zend_rebuild_symbol_table();
-	} else {
-		context->execute_data->symbol_table = &EG(symbol_table);
-	}
+	// if (EG(current_execute_data)) {
+	// 	context->execute_data->symbol_table = zend_rebuild_symbol_table();
+	// } else {
+	// 	context->execute_data->symbol_table = &EG(symbol_table);
+	// }
 
 	zend_init_execute_data(context->execute_data, op_array, return_value);
 
@@ -165,11 +164,6 @@ ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
         EG(current_execute_data) = context->execute_data;
         zend_execute_ex(EG(current_execute_data));
         context->coro_state = CORO_END;
-        //return vm stack
-        // EG(vm_stack) = g_coro_stack.vm_stack;
-        // EG(vm_stack_top) = g_coro_stack.vm_stack_top;
-        // EG(vm_stack_end) = g_coro_stack.vm_stack_end;
-        // free_coroutine_context(context);
     }else{
         test_log("first run code yield \n");
         longjmp(*context->req_ptr,CORO_YIELD);
@@ -1843,18 +1837,19 @@ void init_request(void *request){
     SG(server_context) = request;
     init_request_info();//初始化request_info
     fpm_request_info();//初始化   fpm_scoreboard_proc_s
-
-    char t[200];
-    sprintf(t,"====init_request  fcgi_get_fd:%d,\n",fcgi_get_fd(request));//设置libevnet fd);
-    test_log(t);
 }
 
 void close_request(){
-    if (UNEXPECTED(request_body_fd != -1)) {
-        close(request_body_fd);
-    }
-    request_body_fd = -2;
+    char a[200];
+    sprintf(a,"close request request_body_fd:%d\n",request_body_fd);
 
+    test_log(a);
+    //todo
+    // if (UNEXPECTED(request_body_fd != -1)) {
+    //     close(request_body_fd);
+    // }
+    // request_body_fd = -2;
+    
     if (UNEXPECTED(EG(exit_status) == 255)) {
         if (CGIG(error_header) && *CGIG(error_header)) {
             sapi_header_line ctr = {0};
@@ -1865,18 +1860,32 @@ void close_request(){
         }
     }
 
-    fpm_request_end();
+    test_log("close_request === 2 ===\n");
+
+    // fpm_request_end();
+
+    test_log("close_request === 3 ===\n");
+
     fpm_log_write(NULL);
 
-    efree(SG(request_info).path_translated);
-    SG(request_info).path_translated = NULL;
+    test_log("close_request === 4 ===\n");
+
+    //todo
+    // efree(SG(request_info).path_translated);
+    // SG(request_info).path_translated = NULL;
+
+    test_log("close_request === 5 ===\n");
 
     php_request_shutdown((void *) 0);
+
+    test_log("close_request === 6 ===\n");
 
     requests++;
     if (UNEXPECTED(max_requests && (requests == max_requests))) {
         fcgi_request_set_keep(SG(coroutine_info).context->request, 0);
+        test_log("close_request === 7 ===\n");
         fcgi_finish_request(SG(coroutine_info).context->request, 0);
+        test_log("close_request === 8 ===\n");
         //break;
         return;
     }
@@ -1991,7 +2000,6 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
     int r = setjmp(*SG(coroutine_info).context->req_ptr);
     if(r == CORO_DEFAULT){
         php_execute_script_coro(&file_handle);//执行代码
-        // free_coroutine_context(SG(coroutine_info).context);
         goto fastcgi_request_done2;
     }else if(r == CORO_YIELD){
         test_log("reqest yield \n");
