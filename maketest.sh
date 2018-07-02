@@ -6,4 +6,5 @@
 #########################################################################
 #!/bin/bash
 #./configure --enable-debug --prefix=/usr/local/php7 --enable-fpm && make && make install && sudo killall php-fpm&& sudo /usr/local/php7/sbin/php-fpm
-./configure --enable-debug --prefix=/usr/local/php7 --enable-fpm && make && make install && sudo gdb /usr/local/php7/sbin/php-fpm
+#./configure --enable-debug --prefix=/usr/local/php7 --enable-fpm && make && make install && sudo gdb /usr/local/php7/sbin/php-fpm
+./configure CFLAGS="-g3 -gdwarf-2" CXXFLAGS="-g3 -gdwarf-2" --prefix=/usr/local/php7 --enable-fpm && make && make install && sudo gdb /usr/local/php7/sbin/php-fpm
