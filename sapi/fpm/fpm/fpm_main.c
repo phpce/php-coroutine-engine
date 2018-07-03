@@ -115,250 +115,6 @@ int __riscosify_control = __RISCOSIFY_STRICT_UNIX_SPECS;
 
 
 
-//这里是执行代码的最终函数
-ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
-{
-	// zend_execute_data *execute_data;
-
-	if (EG(exception) != NULL) {
-		return;
-	}
-    sapi_coroutine_context* context = SG(coroutine_info).context;
-
-    context->op_array = op_array;
-
-    //for coroutine
-    //导入context中的全局变量
-    zend_vm_stack_init();
-    
-    // context->execute_data = execute_data;
-    context->ret = return_value;
-
-
-
-	context->execute_data = zend_vm_stack_push_call_frame(ZEND_CALL_TOP_CODE | ZEND_CALL_HAS_SYMBOL_TABLE,
-		(zend_function*)op_array, 0, zend_get_called_scope(EG(current_execute_data)), zend_get_this_object(EG(current_execute_data)));
-	// if (EG(current_execute_data)) {
-	// 	context->execute_data->symbol_table = zend_rebuild_symbol_table();
-	// } else {
-	// 	context->execute_data->symbol_table = &EG(symbol_table);
-	// }
-
-	zend_init_execute_data(context->execute_data, op_array, return_value);
-
-	// EX(prev_execute_data) = EG(current_execute_data);
-	// i_init_execute_data(execute_data, op_array, return_value);
-
-    write_coroutine_context(context);
-    //for coroutine
-    //设置 锚点
-    test_log("defulet run \n");
-    int r = setjmp(*context->buf_ptr);
-
-    char t[200];
-    sprintf(t,"====111=zend_execute_coro:%d,*buf_ptr:%d\n",SG(coroutine_info).context,*context->buf_ptr);
-    test_log(t);
-
-    if(r == CORO_DEFAULT){//first run
-        test_log("jump set core_default \n");
-        EG(current_execute_data) = context->execute_data;
-        zend_execute_ex(EG(current_execute_data));
-        context->coro_state = CORO_END;
-    }else{
-        test_log("first run code yield \n");
-        longjmp(*context->req_ptr,CORO_YIELD);
-    }
-
-    // zend_execute_ex(context->execute_data);
-	
-}
-
-ZEND_API int zend_execute_scripts_coro(int type, zval *retval, int file_count, ...) /* {{{ */
-{
-	va_list files;
-	int i;
-	zend_file_handle *file_handle;
-	zend_op_array *op_array;
-
-	va_start(files, file_count);
-	for (i = 0; i < file_count; i++) {
-		file_handle = va_arg(files, zend_file_handle *);
-		if (!file_handle) {
-			continue;
-		}
-
-		op_array = zend_compile_file(file_handle, type);
-		if (file_handle->opened_path) {
-			zend_hash_add_empty_element(&EG(included_files), file_handle->opened_path);
-		}
-		zend_destroy_file_handle(file_handle);
-		if (op_array) {
-
-            zend_execute_coro(op_array, retval);
-
-			zend_exception_restore();
-			zend_try_exception_handler();
-			if (EG(exception)) {
-				zend_exception_error(EG(exception), E_ERROR);
-			}
-			destroy_op_array(op_array);
-			efree_size(op_array, sizeof(zend_op_array));
-		} else if (type==ZEND_REQUIRE) {
-			va_end(files);
-			return FAILURE;
-		}
-	}
-	va_end(files);
-
-	return SUCCESS;
-}
-/* }}} */
-
-
-#if HAVE_BROKEN_GETCWD
-
-#else
-void free_old_cwd(char *old_cwd,zend_bool use_heap){
-    if (old_cwd[0] != '\0') {
-        php_ignore_value(VCWD_CHDIR(old_cwd));
-    }
-    free_alloca(old_cwd, use_heap);
-}
-#endif
-
-
-
-
-/* {{{ php_execute_script
- */
-PHPAPI int php_execute_script_coro(zend_file_handle *primary_file)
-{
-    sapi_coroutine_context* context = SG(coroutine_info).context;
-	zend_file_handle *prepend_file_p, *append_file_p;
-	zend_file_handle prepend_file = {{0}, NULL, NULL, 0, 0}, append_file = {{0}, NULL, NULL, 0, 0};
-#if HAVE_BROKEN_GETCWD
-	volatile int old_cwd_fd = -1;
-    context->old_cwd_fd=&old_cwd_fd;
-#else
-	// char *old_cwd;
-	// ALLOCA_FLAG(use_heap)
-#endif
-	int retval = 0;
-
-	EG(exit_status) = 0;
-#ifndef HAVE_BROKEN_GETCWD
-# define OLD_CWD_SIZE 4096
-	context->old_cwd = do_alloca(OLD_CWD_SIZE, context->use_heap);
-	context->old_cwd[0] = '\0';
-    SG(coroutine_info).free_old_cwd = free_old_cwd;
-#endif
-
-	zend_try {
-		char realfile[MAXPATHLEN];
-
-#ifdef PHP_WIN32
-		if(primary_file->filename) {
-			UpdateIniFromRegistry((char*)primary_file->filename);
-		}
-#endif
-
-		PG(during_request_startup) = 0;
-
-		if (primary_file->filename && !(SG(options) & SAPI_OPTION_NO_CHDIR)) {
-#if HAVE_BROKEN_GETCWD
-			/* this looks nasty to me */
-			old_cwd_fd = open(".", 0);
-#else
-			php_ignore_value(VCWD_GETCWD(context->old_cwd, OLD_CWD_SIZE-1));
-#endif
-			VCWD_CHDIR_FILE(primary_file->filename);
-		}
-
- 		/* Only lookup the real file path and add it to the included_files list if already opened
-		 *   otherwise it will get opened and added to the included_files list in zend_execute_scripts
-		 */
- 		if (primary_file->filename &&
- 		    (primary_file->filename[0] != '-' || primary_file->filename[1] != 0) &&
- 			primary_file->opened_path == NULL &&
- 			primary_file->type != ZEND_HANDLE_FILENAME
-		) {
-			if (expand_filepath(primary_file->filename, realfile)) {
-				primary_file->opened_path = zend_string_init(realfile, strlen(realfile), 0);
-				zend_hash_add_empty_element(&EG(included_files), primary_file->opened_path);
-			}
-		}
-
-		if (PG(auto_prepend_file) && PG(auto_prepend_file)[0]) {
-			prepend_file.filename = PG(auto_prepend_file);
-			prepend_file.opened_path = NULL;
-			prepend_file.free_filename = 0;
-			prepend_file.type = ZEND_HANDLE_FILENAME;
-			prepend_file_p = &prepend_file;
-		} else {
-			prepend_file_p = NULL;
-		}
-
-		if (PG(auto_append_file) && PG(auto_append_file)[0]) {
-			append_file.filename = PG(auto_append_file);
-			append_file.opened_path = NULL;
-			append_file.free_filename = 0;
-			append_file.type = ZEND_HANDLE_FILENAME;
-			append_file_p = &append_file;
-		} else {
-			append_file_p = NULL;
-		}
-		if (PG(max_input_time) != -1) {
-#ifdef PHP_WIN32
-			zend_unset_timeout();
-#endif
-			zend_set_timeout(INI_INT("max_execution_time"), 0);
-		}
-
-
-		/*
-		   If cli primary file has shabang line and there is a prepend file,
-		   the `start_lineno` will be used by prepend file but not primary file,
-		   save it and restore after prepend file been executed.
-		 */
-		if (CG(start_lineno) && prepend_file_p) {
-
-			int orig_start_lineno = CG(start_lineno);
-
-			CG(start_lineno) = 0;
-			if (zend_execute_scripts_coro(ZEND_REQUIRE, NULL, 1, prepend_file_p) == SUCCESS) {
-				CG(start_lineno) = orig_start_lineno;
-				retval = (zend_execute_scripts_coro(ZEND_REQUIRE, NULL, 2, primary_file, append_file_p) == SUCCESS);
-			}
-		} else {
-
-			retval = (zend_execute_scripts_coro(ZEND_REQUIRE, NULL, 3, prepend_file_p, primary_file, append_file_p) == SUCCESS);
-		}
-        test_log("zend_execute_scripts_coro() run ok");
-	} zend_end_try();
-
-	if (EG(exception)) {
-		zend_try {
-			zend_exception_error(EG(exception), E_ERROR);
-		} zend_end_try();
-	}
-
-#if HAVE_BROKEN_GETCWD
-	if (old_cwd_fd != -1) {
-		fchdir(old_cwd_fd);
-		close(old_cwd_fd);
-	}
-#else
-    free_old_cwd(context->old_cwd,context->use_heap);
-	// if (old_cwd[0] != '\0') {
-	// 	php_ignore_value(VCWD_CHDIR(old_cwd));
-	// }
-	// free_alloca(old_cwd, use_heap);
-#endif
-	return retval;
-}
-/* }}} */
-
-// coroutine end ====
 
 
 
@@ -1078,6 +834,7 @@ static int sapi_cgi_deactivate(void) /* {{{ */
 		1. SAPI Deactivate is called from two places: module init and request shutdown
 		2. When the first call occurs and the request is not set up, flush fails on FastCGI.
 	*/
+
 	if (SG(sapi_started)) {
 		if (
 #ifndef PHP_WIN32
@@ -1829,10 +1586,271 @@ static zend_module_entry cgi_module_entry = {
 	STANDARD_MODULE_PROPERTIES
 };
 
+
+
+
+
+
+
+
+
+
+
+
+//======== coroutine start =====
+
+
+//这里是执行代码的最终函数
+ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
+{
+    // zend_execute_data *execute_data;
+
+    if (EG(exception) != NULL) {
+        return;
+    }
+    sapi_coroutine_context* context = SG(coroutine_info).context;
+
+    context->op_array = op_array;
+
+    //for coroutine
+    //导入context中的全局变量
+    zend_vm_stack_init();
+    
+    // context->execute_data = execute_data;
+    context->ret = return_value;
+
+
+
+    context->execute_data = zend_vm_stack_push_call_frame(ZEND_CALL_TOP_CODE | ZEND_CALL_HAS_SYMBOL_TABLE,
+        (zend_function*)op_array, 0, zend_get_called_scope(EG(current_execute_data)), zend_get_this_object(EG(current_execute_data)));
+    // if (EG(current_execute_data)) {
+    //  context->execute_data->symbol_table = zend_rebuild_symbol_table();
+    // } else {
+    //  context->execute_data->symbol_table = &EG(symbol_table);
+    // }
+
+    zend_init_execute_data(context->execute_data, op_array, return_value);
+
+    // EX(prev_execute_data) = EG(current_execute_data);
+    // i_init_execute_data(execute_data, op_array, return_value);
+
+    write_coroutine_context(context);
+    //for coroutine
+    //设置 锚点
+    test_log("defulet run \n");
+    int r = setjmp(*context->buf_ptr);
+
+    char t[200];
+    sprintf(t,"====111=zend_execute_coro:%d,*buf_ptr:%d\n",SG(coroutine_info).context,*context->buf_ptr);
+    test_log(t);
+
+    if(r == CORO_DEFAULT){//first run
+        test_log("jump set core_default \n");
+        EG(current_execute_data) = context->execute_data;
+        zend_execute_ex(EG(current_execute_data));
+        context->coro_state = CORO_END;
+    }else{
+        test_log("first run code yield \n");
+        longjmp(*context->req_ptr,CORO_YIELD);
+    }
+
+    // zend_execute_ex(context->execute_data);
+    
+}
+
+ZEND_API int zend_execute_scripts_coro(int type, zval *retval, int file_count, ...) /* {{{ */
+{
+    va_list files;
+    int i;
+    zend_file_handle *file_handle;
+    zend_op_array *op_array;
+
+    va_start(files, file_count);
+    for (i = 0; i < file_count; i++) {
+        file_handle = va_arg(files, zend_file_handle *);
+        if (!file_handle) {
+            continue;
+        }
+
+        op_array = zend_compile_file(file_handle, type);
+        if (file_handle->opened_path) {
+            zend_hash_add_empty_element(&EG(included_files), file_handle->opened_path);
+        }
+        zend_destroy_file_handle(file_handle);
+        if (op_array) {
+
+            zend_execute_coro(op_array, retval);
+
+            zend_exception_restore();
+            zend_try_exception_handler();
+            if (EG(exception)) {
+                zend_exception_error(EG(exception), E_ERROR);
+            }
+            destroy_op_array(op_array);
+            efree_size(op_array, sizeof(zend_op_array));
+        } else if (type==ZEND_REQUIRE) {
+            va_end(files);
+            return FAILURE;
+        }
+    }
+    va_end(files);
+
+    return SUCCESS;
+}
+/* }}} */
+
+
+#if HAVE_BROKEN_GETCWD
+
+#else
+void free_old_cwd(char *old_cwd,zend_bool use_heap){
+    if (old_cwd[0] != '\0') {
+        php_ignore_value(VCWD_CHDIR(old_cwd));
+    }
+    free_alloca(old_cwd, use_heap);
+}
+#endif
+
+
+
+
+/* {{{ php_execute_script
+ */
+PHPAPI int php_execute_script_coro(zend_file_handle *primary_file)
+{
+    sapi_coroutine_context* context = SG(coroutine_info).context;
+    zend_file_handle *prepend_file_p, *append_file_p;
+    zend_file_handle prepend_file = {{0}, NULL, NULL, 0, 0}, append_file = {{0}, NULL, NULL, 0, 0};
+#if HAVE_BROKEN_GETCWD
+    volatile int old_cwd_fd = -1;
+    context->old_cwd_fd=&old_cwd_fd;
+#else
+    // char *old_cwd;
+    // ALLOCA_FLAG(use_heap)
+#endif
+    int retval = 0;
+
+    EG(exit_status) = 0;
+#ifndef HAVE_BROKEN_GETCWD
+# define OLD_CWD_SIZE 4096
+    context->old_cwd = do_alloca(OLD_CWD_SIZE, context->use_heap);
+    context->old_cwd[0] = '\0';
+    SG(coroutine_info).free_old_cwd = free_old_cwd;
+#endif
+
+    zend_try {
+        char realfile[MAXPATHLEN];
+
+#ifdef PHP_WIN32
+        if(primary_file->filename) {
+            UpdateIniFromRegistry((char*)primary_file->filename);
+        }
+#endif
+
+        PG(during_request_startup) = 0;
+
+        if (primary_file->filename && !(SG(options) & SAPI_OPTION_NO_CHDIR)) {
+#if HAVE_BROKEN_GETCWD
+            /* this looks nasty to me */
+            old_cwd_fd = open(".", 0);
+#else
+            php_ignore_value(VCWD_GETCWD(context->old_cwd, OLD_CWD_SIZE-1));
+#endif
+            VCWD_CHDIR_FILE(primary_file->filename);
+        }
+
+        /* Only lookup the real file path and add it to the included_files list if already opened
+         *   otherwise it will get opened and added to the included_files list in zend_execute_scripts
+         */
+        if (primary_file->filename &&
+            (primary_file->filename[0] != '-' || primary_file->filename[1] != 0) &&
+            primary_file->opened_path == NULL &&
+            primary_file->type != ZEND_HANDLE_FILENAME
+        ) {
+            if (expand_filepath(primary_file->filename, realfile)) {
+                primary_file->opened_path = zend_string_init(realfile, strlen(realfile), 0);
+                zend_hash_add_empty_element(&EG(included_files), primary_file->opened_path);
+            }
+        }
+
+        if (PG(auto_prepend_file) && PG(auto_prepend_file)[0]) {
+            prepend_file.filename = PG(auto_prepend_file);
+            prepend_file.opened_path = NULL;
+            prepend_file.free_filename = 0;
+            prepend_file.type = ZEND_HANDLE_FILENAME;
+            prepend_file_p = &prepend_file;
+        } else {
+            prepend_file_p = NULL;
+        }
+
+        if (PG(auto_append_file) && PG(auto_append_file)[0]) {
+            append_file.filename = PG(auto_append_file);
+            append_file.opened_path = NULL;
+            append_file.free_filename = 0;
+            append_file.type = ZEND_HANDLE_FILENAME;
+            append_file_p = &append_file;
+        } else {
+            append_file_p = NULL;
+        }
+        if (PG(max_input_time) != -1) {
+#ifdef PHP_WIN32
+            zend_unset_timeout();
+#endif
+            zend_set_timeout(INI_INT("max_execution_time"), 0);
+        }
+
+
+        /*
+           If cli primary file has shabang line and there is a prepend file,
+           the `start_lineno` will be used by prepend file but not primary file,
+           save it and restore after prepend file been executed.
+         */
+        if (CG(start_lineno) && prepend_file_p) {
+
+            int orig_start_lineno = CG(start_lineno);
+
+            CG(start_lineno) = 0;
+            if (zend_execute_scripts_coro(ZEND_REQUIRE, NULL, 1, prepend_file_p) == SUCCESS) {
+                CG(start_lineno) = orig_start_lineno;
+                retval = (zend_execute_scripts_coro(ZEND_REQUIRE, NULL, 2, primary_file, append_file_p) == SUCCESS);
+            }
+        } else {
+
+            retval = (zend_execute_scripts_coro(ZEND_REQUIRE, NULL, 3, prepend_file_p, primary_file, append_file_p) == SUCCESS);
+        }
+        test_log("zend_execute_scripts_coro() run ok");
+    } zend_end_try();
+
+    if (EG(exception)) {
+        zend_try {
+            zend_exception_error(EG(exception), E_ERROR);
+        } zend_end_try();
+    }
+
+#if HAVE_BROKEN_GETCWD
+    if (old_cwd_fd != -1) {
+        fchdir(old_cwd_fd);
+        close(old_cwd_fd);
+    }
+#else
+    free_old_cwd(context->old_cwd,context->use_heap);
+    // if (old_cwd[0] != '\0') {
+    //  php_ignore_value(VCWD_CHDIR(old_cwd));
+    // }
+    // free_alloca(old_cwd, use_heap);
+#endif
+    return retval;
+}
+/* }}} */
+
 void init_request(void *request){
     SG(server_context) = request;
     init_request_info();//初始化request_info
     fpm_request_info();//初始化   fpm_scoreboard_proc_s
+}
+
+void fpm_request_executing_ex(){
+    fpm_request_executing();
 }
 
 void close_request(){
@@ -1872,7 +1890,166 @@ void close_request(){
 
     test_log("close_request === 5 ===\n");
 
-    php_request_shutdown((void *) 0);
+    // php_request_shutdown((void *) 0);
+
+
+
+
+
+
+
+
+
+
+    zend_bool report_memleaks;
+
+    report_memleaks = PG(report_memleaks);
+
+    /* EG(current_execute_data) points into nirvana and therefore cannot be safely accessed
+     * inside zend_executor callback functions.
+     */
+    EG(current_execute_data) = NULL;
+
+    php_deactivate_ticks();
+
+    /* 1. Call all possible shutdown functions registered with register_shutdown_function() */
+    if (PG(modules_activated)) zend_try {
+        php_call_shutdown_functions();
+    } zend_end_try();
+
+    /* 2. Call all possible __destruct() functions */
+    zend_try {
+        zend_call_destructors();
+    } zend_end_try();
+
+    /* 3. Flush all output buffers */
+    zend_try {
+        zend_bool send_buffer = SG(request_info).headers_only ? 0 : 1;
+
+        if (CG(unclean_shutdown) && PG(last_error_type) == E_ERROR &&
+            (size_t)PG(memory_limit) < zend_memory_usage(1)
+        ) {
+            send_buffer = 0;
+        }
+
+        if (!send_buffer) {
+            php_output_discard_all();
+        } else {
+            php_output_end_all();
+        }
+    } zend_end_try();
+
+    /* 4. Reset max_execution_time (no longer executing php code after response sent) */
+    zend_try {
+        zend_unset_timeout();
+    } zend_end_try();
+
+    /* 5. Call all extensions RSHUTDOWN functions */
+    if (PG(modules_activated)) {
+        zend_deactivate_modules();
+    }
+
+    /* 6. Shutdown output layer (send the set HTTP headers, cleanup output handlers, etc.) */
+    zend_try {
+        php_output_deactivate();
+    } zend_end_try();
+
+    /* 7. Free shutdown functions */
+    if (PG(modules_activated)) {
+        php_free_shutdown_functions();
+    }
+
+    /* 8. Destroy super-globals */
+    zend_try {
+        int i;
+
+        for (i=0; i<NUM_TRACK_VARS; i++) {
+            zval_ptr_dtor(&PG(http_globals)[i]);
+        }
+    } zend_end_try();
+
+    /* 9. free request-bound globals */
+    // php_free_request_globals();
+    if (PG(last_error_message)) {
+        free(PG(last_error_message));
+        PG(last_error_message) = NULL;
+    }
+    if (PG(last_error_file)) {
+        free(PG(last_error_file));
+        PG(last_error_file) = NULL;
+    }
+    if (PG(php_sys_temp_dir)) {
+        efree(PG(php_sys_temp_dir));
+        PG(php_sys_temp_dir) = NULL;
+    }
+
+    /* 10. Shutdown scanner/executor/compiler and restore ini entries */
+    zend_deactivate();
+
+    /* 11. Call all extensions post-RSHUTDOWN functions */
+    zend_try {
+        zend_post_deactivate_modules();
+    } zend_end_try();
+
+
+    sprintf(a,"====SG(server_context):%d===\n",SG(server_context));
+
+    SG(coroutine_info).test_log(a);
+
+    sapi_coroutine_context* context = SG(coroutine_info).context;
+
+
+
+    /* 12. SAPI related shutdown (free stuff) */
+    zend_try {
+        sapi_deactivate();
+    } zend_end_try();
+
+
+
+//     virtual_cwd_deactivate();
+
+
+//     zend_try {
+//         php_shutdown_stream_hashes();
+//     } zend_end_try();
+
+
+//     zend_interned_strings_restore();
+//     zend_try {
+//         shutdown_memory_manager(CG(unclean_shutdown) || !report_memleaks, 0);
+//     } zend_end_try();
+
+
+//     zend_try {
+//         zend_unset_timeout();
+//     } zend_end_try();
+
+// #ifdef PHP_WIN32
+//     if (PG(com_initialized)) {
+//         CoUninitialize();
+//         PG(com_initialized) = 0;
+//     }
+// #endif
+
+// #ifdef HAVE_DTRACE
+//     DTRACE_REQUEST_SHUTDOWN(SAFE_FILENAME(SG(request_info).path_translated), SAFE_FILENAME(SG(request_info).request_uri), (char *)SAFE_FILENAME(SG(request_info).request_method));
+// #endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     test_log("close_request === 6 ===\n");
 
@@ -1916,8 +2093,7 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
 	request_body_fd = -1;
 	
 
-    SG(coroutine_info).close_request = close_request;//请求关闭的回调函数
-    SG(coroutine_info).init_request = init_request;//请求关闭的回调函数
+    
 
     SG(coroutine_info).init_request((void*)request);
  //    SG(server_context) = (void *) request;
@@ -2052,7 +2228,7 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef ZTS
-	tsrm_startup(1, 1, 0, NULL);
+	tsrm_startup(128, 1, 0, NULL);
 	tsrm_ls = ts_resource(0);
 #endif
 
@@ -2337,6 +2513,9 @@ consult the installation file that came with this distribution, or visit \n\
 
     //-----开始libevent
     zend_first_try {
+        SG(coroutine_info).close_request = close_request;//请求关闭的回调函数
+        SG(coroutine_info).fpm_request_executing = fpm_request_executing_ex;//请求关闭的回调函数
+        SG(coroutine_info).init_request = init_request;//请求关闭的回调函数
         int r = regist_event(fcgi_fd,do_accept);
 
         // fcgi_destroy_request(request);

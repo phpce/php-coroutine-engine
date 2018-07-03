@@ -38,25 +38,71 @@ void test_log(char *text){
 int regist_event(int fcgi_fd,void (*do_accept())){
 
     init_coroutine_info();
-
+    evutil_socket_t listener;
+    struct sockaddr_in sin;
     struct event_base *base;
     struct event *listener_event;
     base = event_base_new();//初始化libevent
     if (!base)  
-        return false; //libevent 初始化失败  
+        return false; /*XXXerr*/  
+    sin.sin_family = AF_INET;  
+    sin.sin_addr.s_addr = 0;//本机  
+    sin.sin_port = htons(9002); 
+    listener = socket(AF_INET, SOCK_STREAM, 0);
+    if (bind(listener, (struct sockaddr*)&sin, sizeof(sin)) < 0)  
+    {  
+        php_printf("bind");  
+        return false;  
+　　 }
+
+    if (listen(listener, 16)<0)  
+　　 {  
+　　     php_printf("listen");  
+　　     return false;  
+　　 }
 
     //set coroutineinfo
     SG(coroutine_info).base = base;
-    SG(coroutine_info).fcgi_fd = fcgi_fd;
+    SG(coroutine_info).fcgi_fd = listener;
 
-    SG(coroutine_info).test_log("========= libevent base loop START ===== \n");
+    char a[200];
+    sprintf(a,"========= libevent base loop start ---fcgi_fd:%d ===== \n",listener);
+    SG(coroutine_info).test_log(a);
 
-    listener_event = event_new(base, fcgi_fd, EV_READ|EV_PERSIST, do_accept, base);
-    evutil_make_socket_nonblocking(fcgi_fd);
-
+    listener_event = event_new(base, listener, EV_READ|EV_PERSIST, do_accept, (void*)base);
+    evutil_make_socket_nonblocking(listener);
     /* 添加事件 */  
     event_add(listener_event, NULL);
-    event_base_dispatch(base);
+    // event_base_dispatch(base);
+    event_base_loop(base,0);
+
+
+
+
+    // init_coroutine_info();
+
+    // struct event_base *base;
+    // struct event *listener_event;
+    // base = event_base_new();//初始化libevent
+    // if (!base)  
+    //     return false; //libevent 初始化失败  
+
+    // //set coroutineinfo
+    // SG(coroutine_info).base = base;
+    // SG(coroutine_info).fcgi_fd = fcgi_fd;
+
+    // char a[200];
+    // sprintf(a,"========= libevent base loop start ---fcgi_fd:%d ===== \n",fcgi_fd);
+    // SG(coroutine_info).test_log(a);
+
+    // listener_event = event_new(base, fcgi_fd, EV_READ|EV_PERSIST, do_accept, base);
+    // evutil_make_socket_nonblocking(fcgi_fd);
+
+    // /* 添加事件 */  
+    // event_add(listener_event, NULL);
+    // // event_base_dispatch(base);
+    // event_base_loop(base,0);
+    // SG(coroutine_info).test_log("========= libevent base loop done ===== \n");
 
     return true;
 }
@@ -64,6 +110,13 @@ int regist_event(int fcgi_fd,void (*do_accept())){
 
 //将Context中的内容载入全局变量
 void load_coroutine_context(sapi_coroutine_context *context){
+
+    SG(coroutine_info).init_request((void *)context->request);//=====tmp
+
+
+    php_request_startup();
+
+    SG(coroutine_info).fpm_request_executing();
 
     SG(coroutine_info).context = context;//全局当前context指针
 
@@ -75,9 +128,12 @@ void load_coroutine_context(sapi_coroutine_context *context){
     EG(current_execute_data) = context->prev_execute_data;
 
 
-    SG(coroutine_info).init_request((void *)context->request);//=====tmp
+    
     SG(sapi_headers) = context->sapi_headers;
 
+
+
+    // SG(sapi_started) = 1;
 
 
     // SG(request_info) = context->request_info;
@@ -101,6 +157,13 @@ void write_coroutine_context(sapi_coroutine_context *context){
     context->sapi_headers = SG(sapi_headers);
     // context->request_info = SG(request_info);
 
+
+    char a[200];
+    sprintf(a,"write_coroutine_context   execute_data_ptr:%d,prev_execute_data:%d\n",context->execute_data,context->prev_execute_data);
+    test_log(a);
+
+
+
     // *context->execute_data->symbol_table = EG(symbol_table);
 
     // context->symbol_table = EG(symbol_table);
@@ -118,13 +181,15 @@ void resume_coroutine_context(sapi_coroutine_context* context){
         zend_vm_stack_free_args(context->prev_execute_data);
         zend_vm_stack_free_call_frame(context->prev_execute_data);
 
-        init_executor();
-
         load_coroutine_context(context);
         EG(current_execute_data)->opline++;
 
         zend_execute_ex(EG(current_execute_data));
         context->coro_state = CORO_END;
+
+        char a[200];
+        sprintf(a,"write_coroutine_context   execute_data_ptr:%d,prev_execute_data:%d\n",context->execute_data,context->prev_execute_data);
+        test_log(a);
 
         zend_exception_restore();
         zend_try_exception_handler();

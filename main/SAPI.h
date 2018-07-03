@@ -159,6 +159,7 @@ typedef struct _g_sapi_coroutine_info{
     void(*resume_coroutine_context)(sapi_coroutine_context* context);
     void(*yield_coroutine_context)();
     void(*close_request)();
+    void(*fpm_request_executing)();
     void(*init_request)(void *request);
     void(*free_old_cwd)(char *old_cwd,zend_bool use_heap);
 } sapi_coroutine_info;
