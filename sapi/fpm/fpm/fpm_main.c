@@ -2228,15 +2228,53 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef ZTS
-	tsrm_startup(128, 1, 0, NULL);
+	tsrm_startup(1, 1, 0, NULL);
 	tsrm_ls = ts_resource(0);
 #endif
 
-	zend_signal_startup();
+	zend_signal_startup();//SIGG
 
 	sapi_startup(&cgi_sapi_module);
 	cgi_sapi_module.php_ini_path_override = NULL;
 	cgi_sapi_module.php_ini_ignore_cwd = 1;
+
+
+
+
+
+    // void *origin_context = tsrm_new_interpreter_context();//新建，返回原来的
+
+    // void *new_context = tsrm_set_interpreter_context(origin_context);
+
+    
+
+    // SG(coroutine_info).fcgi_fd = 10;
+
+    // printf("1test interpreter:%d\n", SG(coroutine_info).fcgi_fd );
+
+    // tsrm_set_interpreter_context(new_context);
+
+    // SG(coroutine_info).fcgi_fd = 20;
+
+    // printf("2test interpreter:%d\n", SG(coroutine_info).fcgi_fd );
+
+    // tsrm_set_interpreter_context(origin_context);
+    // printf("3test interpreter:%d\n", SG(coroutine_info).fcgi_fd );
+
+    // tsrm_set_interpreter_context(new_context);
+
+    // printf("4test interpreter:%d\n", SG(coroutine_info).fcgi_fd );
+    
+
+
+
+
+
+
+
+
+
+
 
 #ifndef HAVE_ATTRIBUTE_WEAK
 	fcgi_set_logger(fpm_fcgi_log);
