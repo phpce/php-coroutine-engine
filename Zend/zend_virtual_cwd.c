@@ -554,7 +554,6 @@ CWD_API int virtual_cwd_deactivate(void) /* {{{ */
 {
 	if (CWDG(cwd).cwd != NULL) {
 		CWD_STATE_FREE(&CWDG(cwd));
-		// free(CWDG(cwd).cwd);
 		CWDG(cwd).cwd = NULL;
 	}
 	return 0;
