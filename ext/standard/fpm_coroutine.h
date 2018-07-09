@@ -22,11 +22,15 @@ void resume_coroutine_context(sapi_coroutine_context* context);
 void yield_coroutine_context();
 void free_coroutine_context(sapi_coroutine_context* context);
 
-void init_coroutine_context(fcgi_request *request);
+void init_coroutine_context(void* tsrm_context,THREAD_T idx);
+sapi_coroutine_context* use_coroutine_context();
+void init_coroutine_set_request(sapi_coroutine_context* context,fcgi_request *request);
 void load_coroutine_context(sapi_coroutine_context *context);
 void write_coroutine_context(sapi_coroutine_context *context);
 
 
 void init_coroutine_info();
+
+void init_coroutine_static();
 
 #endif

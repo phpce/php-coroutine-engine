@@ -161,7 +161,7 @@ PHPAPI void php_output_shutdown(void)
 PHPAPI int php_output_activate(void)
 {
 #ifdef ZTS
-	memset((*((void ***) ZEND_TSRMLS_CACHE))[TSRM_UNSHUFFLE_RSRC_ID(output_globals_id)], 0, sizeof(zend_output_globals));
+	memset((*((void ***) tsrm_get_ls_cache()))[TSRM_UNSHUFFLE_RSRC_ID(output_globals_id)], 0, sizeof(zend_output_globals));
 #else
 	memset(&output_globals, 0, sizeof(zend_output_globals));
 #endif

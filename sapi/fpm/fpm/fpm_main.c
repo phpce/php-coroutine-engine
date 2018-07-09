@@ -113,11 +113,18 @@ int __riscosify_control = __RISCOSIFY_STRICT_UNIX_SPECS;
 // coroutine begin ====
 #include "ext/standard/fpm_coroutine.h"
 
+#define COROUTINE_INIT_START for(int j=0;j<coroutine_count;j++){\
+        set_force_thread_id(j);\
+        tsrm_set_interpreter_context(get_tsrm_tls_entry(j));\
+        if(j==0)\
+            ts_allocate_open();\
+        else\
+            ts_allocate_close();
 
-
-
-
-
+#define COROUTINE_INIT_END };\
+        set_force_thread_id(0);\
+        tsrm_set_interpreter_context(main_context);\
+        ts_allocate_open();\
 
 #ifndef PHP_WIN32
 /* XXX this will need to change later when threaded fastcgi is implemented.  shane */
@@ -2072,11 +2079,22 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
     socklen_t slen = sizeof(ss);  
     int fd = accept(listener, (struct sockaddr*)&ss, &slen);  
 
+    sapi_coroutine_context* context = use_coroutine_context();
+    set_force_thread_id(context->thread_id);
+    tsrm_set_interpreter_context(context->tsrm_context);//切换协程
+    SG(coroutine_info).context = context;
+    SG(sapi_started) = 0;
 
 
-    char a[200];
-    sprintf(a,"========= do_accept ---fd:%d ===== \n",fd);
-    SG(coroutine_info).test_log(a);
+    // set_force_thread_id(0);
+    // tsrm_set_interpreter_context(get_tsrm_tls_entry(0));//切换协程
+
+
+
+    // char a[200];
+    // sprintf(a,"========= do_accept ---fd:%d ===== \n",fd);
+    // SG(coroutine_info).test_log(a);
+
 
 
    
@@ -2085,6 +2103,8 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
     fcgi_request *request = fpm_init_request(fd);//初始化request
 
     fcgi_set_fd(request,fd);//设置libevnet fd
+
+    init_coroutine_set_request(context,request);
     
     //初始化回调函数（来源于）while (EXPECTED(fcgi_accept_request(request) >= 0))
     init_request_callback(request);//初始化request回调，fpm_init_request中设置的
@@ -2093,7 +2113,7 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
 	request_body_fd = -1;
 	
 
-    
+
 
     SG(coroutine_info).init_request((void*)request);
  //    SG(server_context) = (void *) request;
@@ -2161,13 +2181,12 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
 		goto fastcgi_request_done2;
 	}
 
-    if (EXPECTED(primary_script)) {//由下面提上来，避免释放的麻烦
+    if (EXPECTED(primary_script)) {
         efree(primary_script);
     }
 
 	fpm_request_executing();//proc->request_stage  改变状态FPM_REQUEST_EXECUTING
 
-    init_coroutine_context(request);//初始化context ，一定要在这里。在执行代码前顺便保存上下文信息
 
     int r = setjmp(*SG(coroutine_info).context->req_ptr);
     if(r == CORO_DEFAULT){
@@ -2180,6 +2199,7 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
 
 fastcgi_request_done2:
 	
+    // printf("%s\n", "ddd");
     close_request();
 
     free_coroutine_context(SG(coroutine_info).context);
@@ -2227,60 +2247,56 @@ int main(int argc, char *argv[])
 #endif
 #endif
 
+int coroutine_count = 5;
+
+
 #ifdef ZTS
-	tsrm_startup(1, 1, 0, NULL);
-	tsrm_ls = ts_resource(0);
+	tsrm_startup(coroutine_count, 1, 0, NULL);
+    for(int j=0;j<coroutine_count;j++){
+        create_tsrm_tls_entry(j);
+    }
+    set_force_thread_id(0);
+    // tsrm_ls = ts_resource(0);
+    tsrm_set_interpreter_context(get_tsrm_tls_entry(0));
 #endif
 
-	zend_signal_startup();//SIGG
+    zend_signal_startup();
 
 	sapi_startup(&cgi_sapi_module);
-	cgi_sapi_module.php_ini_path_override = NULL;
-	cgi_sapi_module.php_ini_ignore_cwd = 1;
+    cgi_sapi_module.php_ini_path_override = NULL;
+    cgi_sapi_module.php_ini_ignore_cwd = 1;
 
+    void* main_context = get_tsrm_tls_entry(0);
 
+    init_coroutine_static();//初始化context池
 
+    //p ((sapi_globals_struct* )tsrm_tls_table[2]->storage[1])->coroutine_info
+    //初始化全部协程
+    for(int j=0;j<coroutine_count;j++){
+        set_force_thread_id(j);
+        tsrm_set_interpreter_context(get_tsrm_tls_entry(j));
+        SG(coroutine_info).close_request = close_request;//请求关闭的回调函数
+        SG(coroutine_info).fpm_request_executing = fpm_request_executing_ex;//请求关闭的回调函数
+        SG(coroutine_info).init_request = init_request;//请求关闭的回调函数
+        SG(coroutine_info).idx = j;
+        init_coroutine_info();
 
+        printf("coro_info:%d ,get_tsrm_tls_entry:%d,close_request:%d,SG(coroutine_info).close_request:%d,SG(coroutine_info).idx:%d   \n", SG(coroutine_info),get_tsrm_tls_entry(j),close_request,SG(coroutine_info).close_request,SG(coroutine_info).idx);
 
-    // void *origin_context = tsrm_new_interpreter_context();//新建，返回原来的
-
-    // void *new_context = tsrm_set_interpreter_context(origin_context);
-
-    
-
-    // SG(coroutine_info).fcgi_fd = 10;
-
-    // printf("1test interpreter:%d\n", SG(coroutine_info).fcgi_fd );
-
-    // tsrm_set_interpreter_context(new_context);
-
-    // SG(coroutine_info).fcgi_fd = 20;
-
-    // printf("2test interpreter:%d\n", SG(coroutine_info).fcgi_fd );
-
-    // tsrm_set_interpreter_context(origin_context);
-    // printf("3test interpreter:%d\n", SG(coroutine_info).fcgi_fd );
-
-    // tsrm_set_interpreter_context(new_context);
-
-    // printf("4test interpreter:%d\n", SG(coroutine_info).fcgi_fd );
+        init_coroutine_context(get_tsrm_tls_entry(j),j);//初始化context
+    }
+    set_force_thread_id(0);
+    tsrm_set_interpreter_context(main_context);//恢复到主协程
     
 
 
-
-
-
-
-
-
-
-
-
+COROUTINE_INIT_START
 #ifndef HAVE_ATTRIBUTE_WEAK
 	fcgi_set_logger(fpm_fcgi_log);
 #endif
 
 	fcgi_init();
+COROUTINE_INIT_END
 
 #ifdef PHP_WIN32
 	_fmode = _O_BINARY; /* sets default for file streams to binary */
@@ -2424,6 +2440,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
+    /*print php info*/
 	if (php_information) {
 		cgi_sapi_module.phpinfo_as_text = 1;
 		cgi_sapi_module.startup(&cgi_sapi_module);
@@ -2457,20 +2474,29 @@ int main(int argc, char *argv[])
 	php_optind = orig_optind;
 	php_optarg = orig_optarg;
 
+
+COROUTINE_INIT_START
 #ifdef ZTS
 	SG(request_info).path_translated = NULL;
 #endif
-
+COROUTINE_INIT_END
 	cgi_sapi_module.additional_functions = NULL;
 	cgi_sapi_module.executable_location = argv[0];
 
-	/* startup after we get the above ini override se we get things right */
-	if (cgi_sapi_module.startup(&cgi_sapi_module) == FAILURE) {
+
+
+
+
+COROUTINE_INIT_START
+
+    php_set_module_initialized(0);
+    /* startup after we get the above ini override se we get things right */
+    if (cgi_sapi_module.startup(&cgi_sapi_module) == FAILURE) {
 #ifdef ZTS
-		tsrm_shutdown();
+        tsrm_shutdown();
 #endif
-		return FPM_EXIT_SOFTWARE;
-	}
+        return FPM_EXIT_SOFTWARE;
+    }
 
 	if (use_extended_info) {
 		CG(compiler_options) |= ZEND_COMPILE_EXTENDED_INFO;
@@ -2516,6 +2542,9 @@ consult the installation file that came with this distribution, or visit \n\
 		}
 	}
 
+COROUTINE_INIT_END
+    
+    //初始化fpm
 	if (0 > fpm_init(argc, argv, fpm_config ? fpm_config : CGIG(fpm_config), fpm_prefix, fpm_pid, test_conf, php_allow_to_run_as_root, force_daemon, force_stderr)) {
 
 		if (fpm_globals.send_config_pipe[1]) {
@@ -2533,6 +2562,7 @@ consult the installation file that came with this distribution, or visit \n\
 		zend_quiet_write(fpm_globals.send_config_pipe[1], &writeval, sizeof(writeval));
 		close(fpm_globals.send_config_pipe[1]);
 	}
+
 	fpm_is_running = 1;
 
 	fcgi_fd = fpm_run(&max_requests);
@@ -2548,12 +2578,9 @@ consult the installation file that came with this distribution, or visit \n\
 	/* library is already initialized, now init our request */
 	// request = fpm_init_request(fcgi_fd);
 
-
+    
     //-----开始libevent
     zend_first_try {
-        SG(coroutine_info).close_request = close_request;//请求关闭的回调函数
-        SG(coroutine_info).fpm_request_executing = fpm_request_executing_ex;//请求关闭的回调函数
-        SG(coroutine_info).init_request = init_request;//请求关闭的回调函数
         int r = regist_event(fcgi_fd,do_accept);
 
         // fcgi_destroy_request(request);

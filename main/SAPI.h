@@ -144,6 +144,8 @@ typedef struct _sapi_coroutine_context{
     fcgi_request *request;
     sapi_headers_struct sapi_headers;//用于保存sapi headers
     sapi_request_info request_info;
+    void* tsrm_context;
+    THREAD_T thread_id;
 
 } sapi_coroutine_context;
 
@@ -154,7 +156,10 @@ typedef struct _g_sapi_coroutine_info{
     struct event_base *base;
     int fcgi_fd;
     sapi_coroutine_context* context;//全局当前context
-    int context_count;//全局context链表中context数量
+    int* context_count;//context池中context当前数量
+    sapi_coroutine_context** context_pool;//未使用的context池   双向不闭合链表
+    sapi_coroutine_context** context_use;//正在使用的context池   双向不闭合链表
+
     void(*test_log)(char *text);//output test log
     void(*resume_coroutine_context)(sapi_coroutine_context* context);
     void(*yield_coroutine_context)();
@@ -162,6 +167,7 @@ typedef struct _g_sapi_coroutine_info{
     void(*fpm_request_executing)();
     void(*init_request)(void *request);
     void(*free_old_cwd)(char *old_cwd,zend_bool use_heap);
+    int idx;
 } sapi_coroutine_info;
 
 typedef struct _sapi_globals_struct {

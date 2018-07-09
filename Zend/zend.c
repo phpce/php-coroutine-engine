@@ -554,8 +554,14 @@ static void executor_globals_ctor(zend_executor_globals *executor_globals) /* {{
 {
 	ZEND_TSRMLS_CACHE_UPDATE();
 
+#ifdef ZTS
+	executor_globals->zend_constants = (HashTable *) malloc(sizeof(HashTable));
+	zend_hash_init(executor_globals->zend_constants, 128, NULL, ZEND_CONSTANT_DTOR, 1);
+	zend_copy_constants(executor_globals->zend_constants, GLOBAL_CONSTANTS_TABLE);
+#else
 	zend_startup_constants();
 	zend_copy_constants(EG(zend_constants), GLOBAL_CONSTANTS_TABLE);
+#endif
 	zend_init_rsrc_plist();
 	zend_init_exception_op();
 	zend_init_call_trampoline_op();

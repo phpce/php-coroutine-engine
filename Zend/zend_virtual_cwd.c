@@ -482,6 +482,7 @@ void virtual_cwd_main_cwd_init(uint8_t reinit) /* {{{ */
 	ZeroMemory(&cwd, sizeof(cwd));
 	result = php_win32_ioutil_getcwd(cwd, sizeof(cwd));
 #else
+	memset(cwd,'\0',sizeof(cwd));
 	result = getcwd(cwd, sizeof(cwd));
 #endif
 	if (!result) {
@@ -516,20 +517,34 @@ CWD_API void virtual_cwd_startup(void) /* {{{ */
 CWD_API void virtual_cwd_shutdown(void) /* {{{ */
 {
 #ifndef ZTS
-	cwd_globals_dtor(&cwd_globals);
+	// cwd_globals_dtor(&cwd_globals);
+	cwd_globals_dtor(ts_resource(cwd_globals_id));
 #endif
 #if (defined(ZEND_WIN32) || defined(NETWARE)) && defined(ZTS)
 	tsrm_mutex_free(cwd_mutex);
 #endif
-
+#ifndef ZTS
 	free(main_cwd_state.cwd); /* Don't use CWD_STATE_FREE because the non global states will probably use emalloc()/efree() */
+#endif
 }
 /* }}} */
 
 CWD_API int virtual_cwd_activate(void) /* {{{ */
 {
-	if (CWDG(cwd).cwd == NULL) {
-		CWD_STATE_COPY(&CWDG(cwd), &main_cwd_state);
+
+
+
+	virtual_cwd_globals* cwd = (virtual_cwd_globals*)ts_resource_ex(cwd_globals_id,NULL);
+	// if (CWDG(cwd).cwd == NULL) {
+	// 	CWD_STATE_COPY(&CWDG(cwd), &main_cwd_state);
+	// }
+	if (cwd->cwd.cwd == NULL) {
+
+		cwd->cwd.cwd_length = main_cwd_state.cwd_length;
+		char* _cwd = (char *) emalloc(cwd->cwd.cwd_length+1);
+		cwd->cwd.cwd = _cwd;
+		memcpy(cwd->cwd.cwd, main_cwd_state.cwd, cwd->cwd.cwd_length+1);
+
 	}
 	return 0;
 }
@@ -539,6 +554,7 @@ CWD_API int virtual_cwd_deactivate(void) /* {{{ */
 {
 	if (CWDG(cwd).cwd != NULL) {
 		CWD_STATE_FREE(&CWDG(cwd));
+		// free(CWDG(cwd).cwd);
 		CWDG(cwd).cwd = NULL;
 	}
 	return 0;

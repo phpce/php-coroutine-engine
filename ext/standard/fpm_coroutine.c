@@ -16,6 +16,12 @@
 
 /* use to stor coroutine context */
 
+
+sapi_coroutine_context* global_coroutine_context_pool = NULL;
+sapi_coroutine_context* global_coroutine_context_use = NULL;
+int context_count;
+
+
 /**
  * 测试输出LOG
  */
@@ -31,13 +37,11 @@ void test_log(char *text){
     fclose(pfile);
 }
 
-
 /**
  * 注册libevent
  */
 int regist_event(int fcgi_fd,void (*do_accept())){
 
-    init_coroutine_info();
     evutil_socket_t listener;
     struct sockaddr_in sin;
     struct event_base *base;
@@ -235,7 +239,7 @@ void yield_coroutine_context(){
 /**
  * 释放上下文  todo 内存泄漏，需要进一步处理
  */
-void free_coroutine_context(sapi_coroutine_context* context){
+void release_coroutine_context(sapi_coroutine_context* context){
     return;
 
     if(SG(coroutine_info).context_count>0){
@@ -285,6 +289,73 @@ void free_coroutine_context(sapi_coroutine_context* context){
     }
 }
 
+void free_coroutine_context(sapi_coroutine_context* context){
+    //先清理关系
+    if(context->prev && context->next){
+        context->prev->next = context->next;
+        context->next->prev = context->prev;
+        context->prev = NULL;
+        context->next = NULL;
+    }else if(context->prev){//最后一个
+        context->prev->next = NULL;
+        context->prev = NULL;
+    }else if(context->next){//第一个
+        global_coroutine_context_use = context->next;
+        context->next->prev = NULL;
+        context->next = NULL;
+    }else{
+        global_coroutine_context_use = NULL;
+    }
+
+    //加入新关系
+    if(global_coroutine_context_pool){
+        context->next = global_coroutine_context_pool;
+        global_coroutine_context_pool->prev = context;
+        context->prev = NULL;
+        global_coroutine_context_pool = context;
+    }else{
+        global_coroutine_context_pool = context;
+        context->prev = NULL;
+        context->next = NULL;
+    }
+
+    context_count++;
+}
+
+void init_coroutine_set_request(sapi_coroutine_context* context,fcgi_request *request){
+    context->request = request;
+    SG(coroutine_info).context = context;
+}
+
+
+sapi_coroutine_context* use_coroutine_context(){
+    if(context_count>0){
+        sapi_coroutine_context* result = global_coroutine_context_pool;
+
+        if(global_coroutine_context_pool && global_coroutine_context_pool->next){
+            global_coroutine_context_pool = global_coroutine_context_pool->next;
+            global_coroutine_context_pool->prev = NULL;
+        }else{
+            global_coroutine_context_pool = NULL;
+        }
+
+        if(global_coroutine_context_use){
+            result->next = global_coroutine_context_use;
+            result->prev = NULL;
+            global_coroutine_context_use->prev = result;
+            global_coroutine_context_use = result;
+        }else{
+            global_coroutine_context_use = result;
+            global_coroutine_context_use->next = NULL;
+            global_coroutine_context_use->prev = NULL;
+        }
+
+        context_count--;
+        return result;
+    }else{
+        return NULL;
+    }
+}
 
 
 /**
@@ -292,76 +363,46 @@ void free_coroutine_context(sapi_coroutine_context* context){
  * todo 上下文池化,不池化，会内存泄漏，100多个开始崩溃
  * 在这个函数执行之后，会适用 load_coroutine_context write_coroutine_context将context 中保存的信息导入导出
  */
-void init_coroutine_context(fcgi_request *request){
+void init_coroutine_context(void* tsrm_context,THREAD_T idx){
     //初始化context 上下文
-    sapi_coroutine_context *context = emalloc(sizeof(sapi_coroutine_context));
+    sapi_coroutine_context *context = malloc(sizeof(sapi_coroutine_context));
     context->coro_state = CORO_DEFAULT;
-    context->func_cache = emalloc(sizeof(zend_fcall_info_cache));
-    context->request = request;//存储request
-    context->buf_ptr = emalloc(sizeof(jmp_buf));
-    context->req_ptr = emalloc(sizeof(jmp_buf));
+    context->func_cache = malloc(sizeof(zend_fcall_info_cache));
+    context->request = NULL;
+    context->buf_ptr = malloc(sizeof(jmp_buf));
+    context->req_ptr = malloc(sizeof(jmp_buf));
+    context->tsrm_context = tsrm_context;
+    context->thread_id = idx;
+    context->next = NULL;
+    context->prev = NULL;
 
-    if(!SG(coroutine_info).context){
-        SG(coroutine_info).context = context;
-    }
     //context加入链表
-    //link linktable
-    if(SG(coroutine_info).context_count == 0){
-        context->next = context;
-        context->prev = context;
+    if(global_coroutine_context_pool == NULL){
+        global_coroutine_context_pool = context;
     }else{
-        context->prev = SG(coroutine_info).context->prev;
-        context->prev->next = context;
-        context->next = SG(coroutine_info).context;
-        context->next->prev = context; 
+        global_coroutine_context_pool->prev = context;
+        context->next = global_coroutine_context_pool;
+        global_coroutine_context_pool = context;
     }
-    SG(coroutine_info).context_count++;
-
-    /*
-    初始化参数说明====
-    //这三个是需要处理的
-    fpm_scoreboard  计分板  todo 需要分析一下
-    SG(sapi_headers)   头信息
-    SG(request_info)   请求信息
-
-    其他不需要处理的全局宏
-    PG(XXXX)    header_is_being_sent   struct _php_core_globals  PHP全局配置，与上下文无关
-    CWDG(XXX)   ？？？？？
-    OG(XXX)     output_globals,输出相关，目前看只有输出错误的时候用到。代码执行时应该自动处理
-    EG(XXX)     executor_globals Zend/zend_execute_API.c 执行相关的全局变量，在存储在execute_data里
-    CG(XXX)     compiler_globals 编译相关，暂时未用到
-    */
-
-    SG(coroutine_info).context = context;
-
-
-
-
-    context->sapi_headers = SG(sapi_headers);
-    context->request_info = SG(request_info);
-
-
-
-    // //独立指针的内存(这里应该是用不到。mimetype http_status_line应该是未被声明)
-    // context->sapi_headers.mimetype = emalloc(sizeof(SG(sapi_headers).mimetype));
-    // context->sapi_headers.http_status_line = emalloc(sizeof(SG(sapi_headers).http_status_line));
-    // memcpy(context->sapi_headers.mimetype,SG(sapi_headers).mimetype,sizeof(SG(sapi_headers).mimetype));
-    // memcpy(context->sapi_headers.http_status_line,SG(sapi_headers).http_status_line,sizeof(SG(sapi_headers).http_status_line));
-
-    //将数据写回,相当于擦掉mimetype http_status_line ,这里需要注意的是,
-    //整个进程的第一个sapi_headers的指针可能会造成内存泄漏,可忽略
-
-
+    context_count++;
 }
 
-
+void init_coroutine_static(){
+    global_coroutine_context_pool = NULL;
+    global_coroutine_context_use = NULL;
+    context_count = 0;
+}
 
 void init_coroutine_info(){
     SG(coroutine_info).base = NULL;
     SG(coroutine_info).fcgi_fd = NULL;
-    SG(coroutine_info).context_count = 0;
+    SG(coroutine_info).context_count = &context_count;
     SG(coroutine_info).context = NULL;
     SG(coroutine_info).test_log = test_log;
     SG(coroutine_info).yield_coroutine_context = yield_coroutine_context;
     SG(coroutine_info).resume_coroutine_context = resume_coroutine_context;
+
+    SG(coroutine_info).context_pool = &global_coroutine_context_pool;
+    SG(coroutine_info).context_use = &global_coroutine_context_use;
+
 }
