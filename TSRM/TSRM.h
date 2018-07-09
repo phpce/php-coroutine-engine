@@ -107,6 +107,10 @@ TSRM_API void tsrm_shutdown(void);
 /* allocates a new thread-safe-resource id */
 TSRM_API ts_rsrc_id ts_allocate_id(ts_rsrc_id *rsrc_id, size_t size, ts_allocate_ctor ctor, ts_allocate_dtor dtor);
 
+/* reset thread-safe-resource id */
+TSRM_API void ts_allocate_close(void);
+TSRM_API void ts_allocate_open(void);
+
 /* fetches the requested resource for the current thread */
 TSRM_API void *ts_resource_ex(ts_rsrc_id id, THREAD_T *th_id);
 #define ts_resource(id)			ts_resource_ex(id, NULL)
@@ -149,6 +153,9 @@ TSRM_API void *tsrm_set_new_thread_end_handler(tsrm_thread_end_func_t new_thread
 /* these 3 APIs should only be used by people that fully understand the threading model
  * used by PHP/Zend and the selected SAPI. */
 TSRM_API void *tsrm_new_interpreter_context(void);
+TSRM_API void *get_tsrm_tls_entry(int idx);
+TSRM_API void create_tsrm_tls_entry(int idx);
+TSRM_API void set_force_thread_id(THREAD_T thread_id);
 TSRM_API void *tsrm_set_interpreter_context(void *new_ctx);
 TSRM_API void tsrm_free_interpreter_context(void *context);
 
@@ -173,13 +180,17 @@ TSRM_API void *tsrm_get_ls_cache(void);
 #define TSRMLS_CACHE_EXTERN() extern TSRM_TLS void *TSRMLS_CACHE;
 #define TSRMLS_CACHE_DEFINE() TSRM_TLS void *TSRMLS_CACHE = NULL;
 #if ZEND_DEBUG
-#define TSRMLS_CACHE_UPDATE() TSRMLS_CACHE = tsrm_get_ls_cache()
+// #define TSRMLS_CACHE_UPDATE() TSRMLS_CACHE = tsrm_get_ls_cache()
+#define TSRMLS_CACHE_UPDATE()
 #define TSRMLS_CACHE_RESET()
 #else
-#define TSRMLS_CACHE_UPDATE() if (!TSRMLS_CACHE) TSRMLS_CACHE = tsrm_get_ls_cache()
-#define TSRMLS_CACHE_RESET()  TSRMLS_CACHE = NULL
+// #define TSRMLS_CACHE_UPDATE() if (!TSRMLS_CACHE) TSRMLS_CACHE = tsrm_get_ls_cache()
+#define TSRMLS_CACHE_UPDATE()
+// #define TSRMLS_CACHE_RESET()  TSRMLS_CACHE = NULL
+#define TSRMLS_CACHE_RESET()
 #endif
-#define TSRMLS_CACHE _tsrm_ls_cache
+// #define TSRMLS_CACHE _tsrm_ls_cache
+#define TSRMLS_CACHE tsrm_get_ls_cache()
 
 /* BC only */
 #define TSRMLS_D void

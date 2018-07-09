@@ -45,6 +45,8 @@ typedef struct {
 /* The memory manager table */
 static tsrm_tls_entry	**tsrm_tls_table=NULL;
 static int				tsrm_tls_table_size;
+static int				allocate_flag = 1;
+static THREAD_T 		force_thread_id = -1;
 static ts_rsrc_id		id_count;
 
 /* The resource sizes table */
@@ -220,10 +222,24 @@ TSRM_API void tsrm_shutdown(void)
 #endif
 }
 
+TSRM_API void ts_allocate_close(void){
+	allocate_flag = 0;
+}
+
+TSRM_API void ts_allocate_open(void){
+	allocate_flag = 1;
+}
+
+TSRM_API void set_force_thread_id(THREAD_T thread_id){
+	force_thread_id = thread_id;
+}
+
+
 
 /* allocates a new thread-safe-resource id */
 TSRM_API ts_rsrc_id ts_allocate_id(ts_rsrc_id *rsrc_id, size_t size, ts_allocate_ctor ctor, ts_allocate_dtor dtor)
 {
+	if(!allocate_flag)return NULL;
 	int i;
 
 	TSRM_ERROR((TSRM_ERROR_LEVEL_CORE, "Obtaining a new resource id, %d bytes", size));
@@ -450,6 +466,24 @@ void *tsrm_new_interpreter_context(void)
 	return tsrm_set_interpreter_context(current);
 }
 
+/* allocates a new interpreter context */
+void create_tsrm_tls_entry(int idx)
+{
+	set_force_thread_id(idx);
+	tsrm_tls_table[idx] = tsrm_new_interpreter_context();
+}
+
+/* allocates a new interpreter context */
+void *get_tsrm_tls_entry(int idx)
+{
+	if(idx>=tsrm_tls_table_size)return NULL;
+
+	tsrm_tls_entry *p = tsrm_tls_table[idx];
+	/* switch back to the context that was in use prior to our creation
+	 * of the new one */
+	return p;
+}
+
 
 /* frees all resources allocated for the current thread */
 void ts_free_thread(void)
@@ -582,6 +616,9 @@ void ts_free_id(ts_rsrc_id id)
 /* Obtain the current thread id */
 TSRM_API THREAD_T tsrm_thread_id(void)
 {
+	if(force_thread_id != -1){
+		return force_thread_id;
+	}
 #ifdef TSRM_WIN32
 	return GetCurrentThreadId();
 #elif defined(GNUPTH)
