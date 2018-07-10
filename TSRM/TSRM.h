@@ -107,10 +107,6 @@ TSRM_API void tsrm_shutdown(void);
 /* allocates a new thread-safe-resource id */
 TSRM_API ts_rsrc_id ts_allocate_id(ts_rsrc_id *rsrc_id, size_t size, ts_allocate_ctor ctor, ts_allocate_dtor dtor);
 
-/* reset thread-safe-resource id */
-TSRM_API void ts_allocate_close(void);
-TSRM_API void ts_allocate_open(void);
-
 /* fetches the requested resource for the current thread */
 TSRM_API void *ts_resource_ex(ts_rsrc_id id, THREAD_T *th_id);
 #define ts_resource(id)			ts_resource_ex(id, NULL)
@@ -155,7 +151,9 @@ TSRM_API void *tsrm_set_new_thread_end_handler(tsrm_thread_end_func_t new_thread
 TSRM_API void *tsrm_new_interpreter_context(void);
 TSRM_API void *get_tsrm_tls_entry(int idx);
 TSRM_API void create_tsrm_tls_entry(int idx);
-TSRM_API void set_force_thread_id(THREAD_T thread_id);
+TSRM_API void set_force_thread_id(int thread_id);
+TSRM_API int get_force_thread_id(void);
+TSRM_API void reset_tsrm_tls_id_count(void);
 TSRM_API void *tsrm_set_interpreter_context(void *new_ctx);
 TSRM_API void tsrm_free_interpreter_context(void *context);
 
