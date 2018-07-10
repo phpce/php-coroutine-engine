@@ -113,18 +113,14 @@ int __riscosify_control = __RISCOSIFY_STRICT_UNIX_SPECS;
 // coroutine begin ====
 #include "ext/standard/fpm_coroutine.h"
 
-#define COROUTINE_INIT_START for(int j=0;j<coroutine_count;j++){\
+#define COROUTINE_INIT_START reset_tsrm_tls_id_count();\
+	for(int j=0;j<coroutine_count;j++){\
         set_force_thread_id(j);\
         tsrm_set_interpreter_context(get_tsrm_tls_entry(j));\
-        if(j==0)\
-            ts_allocate_open();\
-        else\
-            ts_allocate_close();
 
 #define COROUTINE_INIT_END };\
         set_force_thread_id(0);\
         tsrm_set_interpreter_context(main_context);\
-        ts_allocate_open();\
 
 #ifndef PHP_WIN32
 /* XXX this will need to change later when threaded fastcgi is implemented.  shane */
@@ -2080,11 +2076,13 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
     int fd = accept(listener, (struct sockaddr*)&ss, &slen);  
 
     sapi_coroutine_context* context = use_coroutine_context();
-    set_force_thread_id(context->thread_id);
-    tsrm_set_interpreter_context(context->tsrm_context);//切换协程
     SG(coroutine_info).context = context;
     SG(sapi_started) = 0;
 
+    SG(coroutine_info).base = base;
+
+
+    printf("%s\n", "======");
 
     // set_force_thread_id(0);
     // tsrm_set_interpreter_context(get_tsrm_tls_entry(0));//切换协程
@@ -2260,33 +2258,34 @@ int coroutine_count = 5;
     tsrm_set_interpreter_context(get_tsrm_tls_entry(0));
 #endif
 
-    zend_signal_startup();
+    void* main_context = get_tsrm_tls_entry(0);
+
+    init_coroutine_static();//初始化context池  
+
+    //p ((sapi_globals_struct* )tsrm_tls_table[2]->storage[1])->coroutine_info
+    //初始化全部协程
+COROUTINE_INIT_START
+	zend_signal_startup();
 
 	sapi_startup(&cgi_sapi_module);
     cgi_sapi_module.php_ini_path_override = NULL;
     cgi_sapi_module.php_ini_ignore_cwd = 1;
 
-    void* main_context = get_tsrm_tls_entry(0);
+          
+    printf("get_tsrm_tls_entry:%d,  \n",get_tsrm_tls_entry(j));
+	printf("coro_info:%d \n", SG(coroutine_info));
 
-    init_coroutine_static();//初始化context池
 
-    //p ((sapi_globals_struct* )tsrm_tls_table[2]->storage[1])->coroutine_info
-    //初始化全部协程
-    for(int j=0;j<coroutine_count;j++){
-        set_force_thread_id(j);
-        tsrm_set_interpreter_context(get_tsrm_tls_entry(j));
-        SG(coroutine_info).close_request = close_request;//请求关闭的回调函数
-        SG(coroutine_info).fpm_request_executing = fpm_request_executing_ex;//请求关闭的回调函数
-        SG(coroutine_info).init_request = init_request;//请求关闭的回调函数
-        SG(coroutine_info).idx = j;
-        init_coroutine_info();
+    SG(coroutine_info).close_request = close_request;//请求关闭的回调函数
+    SG(coroutine_info).fpm_request_executing = fpm_request_executing_ex;//请求关闭的回调函数
+    SG(coroutine_info).init_request = init_request;//请求关闭的回调函数
+    SG(coroutine_info).idx = j;
+    init_coroutine_info();
 
-        printf("coro_info:%d ,get_tsrm_tls_entry:%d,close_request:%d,SG(coroutine_info).close_request:%d,SG(coroutine_info).idx:%d   \n", SG(coroutine_info),get_tsrm_tls_entry(j),close_request,SG(coroutine_info).close_request,SG(coroutine_info).idx);
+    // printf("coro_info:%d ,get_tsrm_tls_entry:%d,close_request:%d,SG(coroutine_info).close_request:%d,SG(coroutine_info).idx:%d   \n", SG(coroutine_info),get_tsrm_tls_entry(j),close_request,SG(coroutine_info).close_request,SG(coroutine_info).idx);
 
-        init_coroutine_context(get_tsrm_tls_entry(j),j);//初始化context
-    }
-    set_force_thread_id(0);
-    tsrm_set_interpreter_context(main_context);//恢复到主协程
+    init_coroutine_context(get_tsrm_tls_entry(j),j);//初始化context
+COROUTINE_INIT_END
     
 
 
@@ -2488,8 +2487,10 @@ COROUTINE_INIT_END
 
 
 COROUTINE_INIT_START
-
     php_set_module_initialized(0);
+
+    sapi_init();
+
     /* startup after we get the above ini override se we get things right */
     if (cgi_sapi_module.startup(&cgi_sapi_module) == FAILURE) {
 #ifdef ZTS
@@ -2497,7 +2498,10 @@ COROUTINE_INIT_START
 #endif
         return FPM_EXIT_SOFTWARE;
     }
+COROUTINE_INIT_END
 
+
+COROUTINE_INIT_START
 	if (use_extended_info) {
 		CG(compiler_options) |= ZEND_COMPILE_EXTENDED_INFO;
 	}

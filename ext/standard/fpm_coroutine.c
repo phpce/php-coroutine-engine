@@ -65,6 +65,14 @@ int regist_event(int fcgi_fd,void (*do_accept())){
 　　     return false;  
 　　 }
 
+
+
+
+
+    
+
+
+
     //set coroutineinfo
     SG(coroutine_info).base = base;
     SG(coroutine_info).fcgi_fd = listener;
@@ -118,7 +126,7 @@ void load_coroutine_context(sapi_coroutine_context *context){
     SG(coroutine_info).init_request((void *)context->request);//=====tmp
 
 
-    php_request_startup();
+    // php_request_startup();
 
     SG(coroutine_info).fpm_request_executing();
 
@@ -178,6 +186,11 @@ void write_coroutine_context(sapi_coroutine_context *context){
 }
 
 void resume_coroutine_context(sapi_coroutine_context* context){
+
+
+    set_force_thread_id(context->thread_id);
+    tsrm_set_interpreter_context(get_tsrm_tls_entry(context->thread_id));
+
 
     int r = setjmp(*context->buf_ptr);//yield之后的代码段，设置起始标记
     if(r == CORO_DEFAULT){//继续
@@ -327,7 +340,9 @@ void init_coroutine_set_request(sapi_coroutine_context* context,fcgi_request *re
     SG(coroutine_info).context = context;
 }
 
-
+/**
+ * 切换协程
+ */
 sapi_coroutine_context* use_coroutine_context(){
     if(context_count>0){
         sapi_coroutine_context* result = global_coroutine_context_pool;
@@ -351,6 +366,11 @@ sapi_coroutine_context* use_coroutine_context(){
         }
 
         context_count--;
+
+
+        set_force_thread_id(result->thread_id);
+        tsrm_set_interpreter_context(get_tsrm_tls_entry(result->thread_id));
+
         return result;
     }else{
         return NULL;

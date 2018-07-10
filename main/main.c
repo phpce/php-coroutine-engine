@@ -2143,8 +2143,15 @@ int php_module_startup(sapi_module_struct *sf, zend_module_entry *additional_mod
 	memset(&core_globals, 0, sizeof(core_globals));
 	php_startup_ticks();
 #endif
+
 	gc_globals_ctor();
 
+
+
+
+
+
+	//初始化内存池
 	zuf.error_function = php_error_cb;
 	zuf.printf_function = php_printf;
 	zuf.write_function = php_output_wrapper;
@@ -2159,6 +2166,16 @@ int php_module_startup(sapi_module_struct *sf, zend_module_entry *additional_mod
 	zuf.getenv_function = sapi_getenv;
 	zuf.resolve_path_function = php_resolve_path_for_zend;
 	zend_startup(&zuf, NULL);
+
+
+
+
+
+
+
+
+
+
 
 #if HAVE_SETLOCALE
 	setlocale(LC_CTYPE, "");
@@ -2284,7 +2301,7 @@ int php_module_startup(sapi_module_struct *sf, zend_module_entry *additional_mod
 	zuv.html_errors = 1;
 	zuv.import_use_extension = ".php";
 	zuv.import_use_extension_length = (uint)strlen(zuv.import_use_extension);
-	php_startup_auto_globals();
+	php_startup_auto_globals(); //运行各种模块
 	zend_set_utility_values(&zuv);
 	php_startup_sapi_content_types();
 
@@ -2305,7 +2322,10 @@ int php_module_startup(sapi_module_struct *sf, zend_module_entry *additional_mod
 	   ahead of all other internals
 	 */
 	php_ini_register_extensions();
-	zend_startup_modules();
+
+	if(get_force_thread_id() <= 0){//模块只初始化一次
+		zend_startup_modules();
+	}
 
 	/* start Zend extensions */
 	zend_startup_extensions();

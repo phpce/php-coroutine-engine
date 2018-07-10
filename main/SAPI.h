@@ -262,6 +262,7 @@ SAPI_API size_t sapi_apply_default_charset(char **mimetype, size_t len);
 SAPI_API void sapi_activate_headers_only(void);
 
 SAPI_API int sapi_get_fd(int *fd);
+SAPI_API void sapi_init();
 SAPI_API int sapi_force_http_10(void);
 
 SAPI_API int sapi_get_target_uid(uid_t *);

@@ -1053,6 +1053,10 @@ SAPI_API int sapi_get_fd(int *fd)
 	}
 }
 
+SAPI_API void sapi_init(){
+	sapi_module.input_filter_init = NULL;
+}
+
 SAPI_API int sapi_force_http_10(void)
 {
 	if (sapi_module.force_http_10) {
