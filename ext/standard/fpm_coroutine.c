@@ -65,14 +65,6 @@ int regist_event(int fcgi_fd,void (*do_accept())){
 　　     return false;  
 　　 }
 
-
-
-
-
-    
-
-
-
     //set coroutineinfo
     SG(coroutine_info).base = base;
     SG(coroutine_info).fcgi_fd = listener;
@@ -89,32 +81,30 @@ int regist_event(int fcgi_fd,void (*do_accept())){
     event_base_loop(base,0);
 
 
+    // char a[200];
+    // sprintf(a,"====2===== libevent base loop start ---fcgi_fd:%d ===== \n",fcgi_fd);
 
-
-    // init_coroutine_info();
+    // SG(coroutine_info).test_log(a);
 
     // struct event_base *base;
     // struct event *listener_event;
     // base = event_base_new();//初始化libevent
     // if (!base)  
-    //     return false; //libevent 初始化失败  
+    //     return false; //libevent 初始化失败 
 
     // //set coroutineinfo
     // SG(coroutine_info).base = base;
-    // SG(coroutine_info).fcgi_fd = fcgi_fd;
 
-    // char a[200];
+    
     // sprintf(a,"========= libevent base loop start ---fcgi_fd:%d ===== \n",fcgi_fd);
     // SG(coroutine_info).test_log(a);
 
     // listener_event = event_new(base, fcgi_fd, EV_READ|EV_PERSIST, do_accept, base);
-    // evutil_make_socket_nonblocking(fcgi_fd);
+    // // evutil_make_socket_nonblocking(fcgi_fd);
 
     // /* 添加事件 */  
     // event_add(listener_event, NULL);
-    // // event_base_dispatch(base);
-    // event_base_loop(base,0);
-    // SG(coroutine_info).test_log("========= libevent base loop done ===== \n");
+    // event_base_dispatch(base);
 
     return true;
 }
