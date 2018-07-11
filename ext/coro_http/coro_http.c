@@ -60,6 +60,15 @@ ZEND_DECLARE_MODULE_GLOBALS(coro_http)
 /* True global resources - no need for thread safety here */
 static int le_coro_http;
 
+/**
+    扩展需要用到的member
+    SG(coroutine_info).base;                            基础event_loop_base
+    SG(coroutine_info).context                          上下文
+    SG(coroutine_info).test_log(char* str);             输出LOG
+    SG(coroutine_info).yield_coroutine_context();       释放当前协程
+    SG(coroutine_info).resume_coroutine_context(context);   切换到协程
+ */
+
 
 void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
 {

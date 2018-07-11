@@ -837,7 +837,6 @@ static int sapi_cgi_deactivate(void) /* {{{ */
 		1. SAPI Deactivate is called from two places: module init and request shutdown
 		2. When the first call occurs and the request is not set up, flush fails on FastCGI.
 	*/
-
 	if (SG(sapi_started)) {
 		if (
 #ifndef PHP_WIN32
@@ -970,11 +969,6 @@ static int is_valid_path(const char *path)
 }
 /* }}} */
 
-
-
-
-
-
 /* {{{ init_request_info
 
   initializes request_info structure
@@ -1049,7 +1043,6 @@ static void init_request_info(void)
 	char *script_path_translated = env_script_filename;
 	char *ini;
 	int apache_was_here = 0;
-
 
 	/* some broken servers do not have script_filename or argv0
 	 * an example, IIS configured in some ways.  then they do more
@@ -1589,20 +1582,6 @@ static zend_module_entry cgi_module_entry = {
 	STANDARD_MODULE_PROPERTIES
 };
 
-
-
-
-
-
-
-
-
-
-
-
-//======== coroutine start =====
-
-
 //这里是执行代码的最终函数
 ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
 {
@@ -1621,8 +1600,6 @@ ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
     
     // context->execute_data = execute_data;
     context->ret = return_value;
-
-
 
     context->execute_data = zend_vm_stack_push_call_frame(ZEND_CALL_TOP_CODE | ZEND_CALL_HAS_SYMBOL_TABLE,
         (zend_function*)op_array, 0, zend_get_called_scope(EG(current_execute_data)), zend_get_this_object(EG(current_execute_data)));
@@ -1713,9 +1690,6 @@ void free_old_cwd(char *old_cwd,zend_bool use_heap){
     free_alloca(old_cwd, use_heap);
 }
 #endif
-
-
-
 
 /* {{{ php_execute_script
  */
@@ -1895,15 +1869,6 @@ void close_request(){
 
     // php_request_shutdown((void *) 0);
 
-
-
-
-
-
-
-
-
-
     zend_bool report_memleaks;
 
     report_memleaks = PG(report_memleaks);
@@ -2001,8 +1966,6 @@ void close_request(){
 
     sapi_coroutine_context* context = SG(coroutine_info).context;
 
-
-
     /* 12. SAPI related shutdown (free stuff) */
     zend_try {
         sapi_deactivate();
@@ -2039,21 +2002,6 @@ void close_request(){
 //     DTRACE_REQUEST_SHUTDOWN(SAFE_FILENAME(SG(request_info).path_translated), SAFE_FILENAME(SG(request_info).request_uri), (char *)SAFE_FILENAME(SG(request_info).request_method));
 // #endif
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     test_log("close_request === 6 ===\n");
 
     requests++;
@@ -2081,21 +2029,15 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
 
     SG(coroutine_info).base = base;
 
-
     printf("%s\n", "======");
 
     // set_force_thread_id(0);
     // tsrm_set_interpreter_context(get_tsrm_tls_entry(0));//切换协程
 
-
-
     // char a[200];
     // sprintf(a,"========= do_accept ---fd:%d ===== \n",fd);
     // SG(coroutine_info).test_log(a);
 
-
-
-   
     //上下文内私有
     zend_file_handle file_handle; 
     fcgi_request *request = fpm_init_request(fd);//初始化request
@@ -2109,9 +2051,6 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
 
     char *primary_script = NULL;
 	request_body_fd = -1;
-	
-
-
 
     SG(coroutine_info).init_request((void*)request);
  //    SG(server_context) = (void *) request;
@@ -2202,8 +2141,6 @@ fastcgi_request_done2:
 
     free_coroutine_context(SG(coroutine_info).context);
 }  
-
-
 
 /* {{{ main
  */
@@ -2483,9 +2420,6 @@ COROUTINE_INIT_END
 	cgi_sapi_module.executable_location = argv[0];
 
 
-
-
-
 COROUTINE_INIT_START
     php_set_module_initialized(0);
 
@@ -2726,12 +2660,6 @@ COROUTINE_INIT_END
 // 	} zend_catch {
 // 		exit_status = FPM_EXIT_SOFTWARE;
 // 	} zend_end_try();
-
-
-
-
-
-
 
 
 out:
