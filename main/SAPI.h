@@ -145,7 +145,7 @@ typedef struct _sapi_coroutine_context{
     sapi_headers_struct sapi_headers;//用于保存sapi headers
     sapi_request_info request_info;
     void* tsrm_context;
-    THREAD_T thread_id;
+    int thread_id;
 
 } sapi_coroutine_context;
 

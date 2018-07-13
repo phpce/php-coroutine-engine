@@ -91,10 +91,6 @@ int regist_event(int fcgi_fd,void (*do_accept())){
     // base = event_base_new();//初始化libevent
     // if (!base)  
     //     return false; //libevent 初始化失败 
-
-    // //set coroutineinfo
-    // SG(coroutine_info).base = base;
-
     
     // sprintf(a,"========= libevent base loop start ---fcgi_fd:%d ===== \n",fcgi_fd);
     // SG(coroutine_info).test_log(a);

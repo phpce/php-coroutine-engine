@@ -1803,8 +1803,14 @@ ZEND_API int zend_startup_module_ex(zend_module_entry *module) /* {{{ */
 	}
 	module->module_started = 1;
 
+
+	fprintf(stderr, "tag 1 ---name:%s,globals_size:%d\n",module->name,module->globals_size );
+
+
+
 	/* Check module dependencies */
 	if (module->deps) {
+		fprintf(stderr, "tag 2 ---name:%s,globals_size:%d\n",module->name,module->globals_size );
 		const zend_module_dep *dep = module->deps;
 
 		while (dep->name) {
@@ -1826,6 +1832,7 @@ ZEND_API int zend_startup_module_ex(zend_module_entry *module) /* {{{ */
 			}
 			++dep;
 		}
+		fprintf(stderr, "tag 3 ---name:%s,globals_size:%d\n",module->name,module->globals_size );
 	}
 
 	/* Initialize module globals */
@@ -1838,6 +1845,7 @@ ZEND_API int zend_startup_module_ex(zend_module_entry *module) /* {{{ */
 		}
 #endif
 	}
+	fprintf(stderr, "tag 4 ---name:%s,globals_size:%d\n",module->name,module->globals_size );
 	if (module->module_startup_func) {
 		EG(current_module) = module;
 		if (module->module_startup_func(module->type, module->module_number)==FAILURE) {
@@ -1847,6 +1855,7 @@ ZEND_API int zend_startup_module_ex(zend_module_entry *module) /* {{{ */
 		}
 		EG(current_module) = NULL;
 	}
+	fprintf(stderr, "tag 5 ---name:%s,globals_size:%d\n",module->name,module->globals_size );
 	return SUCCESS;
 }
 /* }}} */
@@ -1966,6 +1975,10 @@ ZEND_API void zend_collect_module_handlers(void) /* {{{ */
 ZEND_API int zend_startup_modules(void) /* {{{ */
 {
 	zend_hash_sort_ex(&module_registry, zend_sort_modules, NULL, 0);
+	zend_module_entry *mob;
+	ZEND_HASH_FOREACH_PTR(&module_registry, mob) {
+		fprintf(stderr, "-----in  ---- zend_hash_apply----name:%s,globals_size:%d,nNumUsed:%d\n",mob->name,mob->globals_size,module_registry.nNumUsed );
+	} ZEND_HASH_FOREACH_END();
 	zend_hash_apply(&module_registry, zend_startup_module_zval);
 	return SUCCESS;
 }

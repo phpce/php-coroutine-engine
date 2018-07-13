@@ -672,11 +672,16 @@ PHPAPI int php_get_module_initialized(void)
 }
 /* }}} */
 
-/* {{{ php_get_module_initialized
+/* {{{ php_module_initialized
  */
-PHPAPI void php_set_module_initialized(int initialized)
+PHPAPI void php_module_initialized()
 {
-	module_initialized = initialized;
+	module_initialized = 0;
+
+	// zend_module_entry *mob;
+	// ZEND_HASH_FOREACH_PTR(&module_registry, mob) {
+	// 	mob->module_started = 0;
+	// } ZEND_HASH_FOREACH_END();
 }
 /* }}} */
 
@@ -2323,10 +2328,9 @@ int php_module_startup(sapi_module_struct *sf, zend_module_entry *additional_mod
 	 */
 	php_ini_register_extensions();
 
-	if(get_force_thread_id() <= 0){//模块只初始化一次
-		zend_startup_modules();
+	if(get_force_thread_id()<=0){
+	zend_startup_modules();
 	}
-
 	/* start Zend extensions */
 	zend_startup_extensions();
 
@@ -2419,7 +2423,6 @@ int php_module_startup(sapi_module_struct *sf, zend_module_entry *additional_mod
 
 	sapi_deactivate();
 	module_startup = 0;
-
 	shutdown_memory_manager(1, 0);
 	zend_interned_strings_snapshot();
  	virtual_cwd_activate();

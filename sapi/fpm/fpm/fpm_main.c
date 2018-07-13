@@ -2018,6 +2018,9 @@ void close_request(){
 
 void do_accept(evutil_socket_t listener, short event, void *arg)  
 {  
+	char a[200];
+	sprintf(a,"========= do_accept ===== \n");
+
     struct event_base *base = arg;  
     struct sockaddr_storage ss;  
     socklen_t slen = sizeof(ss);  
@@ -2029,14 +2032,14 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
 
     SG(coroutine_info).base = base;
 
-    printf("%s\n", "======");
+    // printf("%s\n", "======");
 
     // set_force_thread_id(0);
     // tsrm_set_interpreter_context(get_tsrm_tls_entry(0));//切换协程
 
-    // char a[200];
-    // sprintf(a,"========= do_accept ---fd:%d ===== \n",fd);
-    // SG(coroutine_info).test_log(a);
+    
+    sprintf(a,"========= do_accept ---fd:%d ===== \n",fd);
+    SG(coroutine_info).test_log(a);
 
     //上下文内私有
     zend_file_handle file_handle; 
@@ -2415,14 +2418,11 @@ COROUTINE_INIT_START
 #ifdef ZTS
 	SG(request_info).path_translated = NULL;
 #endif
-COROUTINE_INIT_END
+
 	cgi_sapi_module.additional_functions = NULL;
 	cgi_sapi_module.executable_location = argv[0];
 
-
-COROUTINE_INIT_START
-    php_set_module_initialized(0);
-
+    php_module_initialized();
     sapi_init();
 
     /* startup after we get the above ini override se we get things right */
