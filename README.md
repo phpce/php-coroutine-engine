@@ -70,6 +70,10 @@ sudo /usr/local/php7/sbin/php-fpm
 
 8.配置nginx，请自行查阅相关资料,请将nginx的访问目录配置成源码中的tutorial目录，主要是里面的test.php,用于测试
 
+9.安装nodejs并启动test.js 
+node tutorial/test.js
+
+
 The PHP Interpreter
 ===================
 This is the github mirror of the official PHP repository located at
