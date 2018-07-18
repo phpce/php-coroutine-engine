@@ -1854,10 +1854,7 @@ ZEND_API int zend_startup_module_ex(zend_module_entry *module) /* {{{ */
 static int zend_startup_module_zval(zval *zv) /* {{{ */
 {
 	zend_module_entry *module = Z_PTR_P(zv);
-	fprintf(stderr, "--tag1---in  ---- zend_startup_module_zval----module_ptr:%d,name:%s,globals_size:%d\n",module,module->name,module->globals_size);
-	int x = (zend_startup_module_ex(module) == SUCCESS) ? ZEND_HASH_APPLY_KEEP : ZEND_HASH_APPLY_REMOVE;
-	fprintf(stderr, "--tag2---in  ---- zend_startup_module_zval----module_ptr:%d,name:%s,globals_size:%d,x:%d\n",module,module->name,module->globals_size,x);
-	return x;
+	return (zend_startup_module_ex(module) == SUCCESS) ? ZEND_HASH_APPLY_KEEP : ZEND_HASH_APPLY_REMOVE;
 }
 /* }}} */
 
@@ -1968,12 +1965,12 @@ ZEND_API void zend_collect_module_handlers(void) /* {{{ */
 ZEND_API int zend_startup_modules(void) /* {{{ */
 {
 	zend_hash_sort_ex(&module_registry, zend_sort_modules, NULL, 0);
-	zend_module_entry *mob;
-	ZEND_HASH_FOREACH_PTR(&module_registry, mob) {
-		fprintf(stderr, "-----in  ---- zend_hash_apply----module_ptr:%d,name:%s,globals_size:%d,nNumUsed:%d\n",mob,mob->name,mob->globals_size,module_registry.nNumUsed );
-	} ZEND_HASH_FOREACH_END();
-	// zend_hash_apply(&module_registry, zend_startup_module_zval);
-	zend_hash_apply_test(&module_registry, zend_startup_module_zval);
+	// zend_module_entry *mob;
+	// ZEND_HASH_FOREACH_PTR(&module_registry, mob) {
+	// 	fprintf(stderr, "-----in  ---- zend_hash_apply----module_ptr:%d,name:%s,globals_size:%d,nNumUsed:%d\n",mob,mob->name,mob->globals_size,module_registry.nNumUsed );
+	// } ZEND_HASH_FOREACH_END();
+	zend_hash_apply(&module_registry, zend_startup_module_zval);
+	// zend_hash_apply_test(&module_registry, zend_startup_module_zval);
 	return SUCCESS;
 }
 /* }}} */
