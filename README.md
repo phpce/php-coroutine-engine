@@ -1,6 +1,24 @@
-The PHP Interpreter
+项目说明
+===================
+这个项目是从PHP官方的github中fork出来的版本，基于php7.1.17版本。本项目主要用来研究PHP-FPM支持协程。
+
+协程是一种可以支持高并发服务器的设计模式。
+现在主流的服务器端语言和框架均支持协程调用，包括golang、openresty、java、swoole等。
+协程可以降低服务器阻塞，对于需要使用远程调用的服务如使用rpc、mysql、redis等场景，使用协程可以显著提升其服务器性能。
+是一种服务器端异步非阻塞IO模型的一种实现方式。
+
+PHP-FPM的设计模式主要是通过多进程来进行并发处理请求。对于服务器资源的使用不充分。
+本项目就是通过对PHP-FPM进行优化，通过实现协程模式的PHP-FPM，最终可以像NGINX一样，几个进程即可处理大量的并发请求，充分的利用CPU资源，成倍提PHP服务器性能。
+
+协程原理
 ===================
 
+
+
+
+
+The PHP Interpreter
+===================
 This is the github mirror of the official PHP repository located at
 http://git.php.net.
 
