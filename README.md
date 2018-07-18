@@ -47,30 +47,39 @@ PHP-FPM的设计模式主要是通过多进程来进行并发处理请求。对�
 1.系统中先要安装libevent库，具体安装方法请自行查找资料
 
 2.项目根目录中执行
+
 sh buildconf --force
 
 3.项目根目录中执行，安装php
+
 ./configure --prefix=/usr/local/php7 --enable-fpm --enable-maintainer-zts && make && make install
 
 4.安装协程扩展coro_http,进入ext/coro_http
 执行刚刚安装好的php对应的phpize
+
 /usr/local/php7/bin/phpize
+
 ./configure --with-php-config=/usr/local/php7/bin/php-config --enable-coro_http && make &&sudo  make install
 
 5.修改php-fpm配置文件，将进程数设置成1（php-fpm.d/www.conf）
 主要是这两个参数
+
 pm = static
+
 pm.max_children = 1
 
 6.修改PHP配置文件，增加coro_http扩展(具体位置具体修改)
+
 extension=/Users/sioomy/work/php-src/ext/coro_http/modules/coro_http.so
 
 7.启动php-fpm
+
 sudo /usr/local/php7/sbin/php-fpm
 
 8.配置nginx，请自行查阅相关资料,请将nginx的访问目录配置成源码中的tutorial目录，主要是里面的test.php,用于测试
 
 9.安装nodejs并启动test.js 
+
 node tutorial/test.js
 
 10.这里就可以开始测试了，根据配置好的NGINX，直接访问浏览器
