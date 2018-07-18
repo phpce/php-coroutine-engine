@@ -42,65 +42,65 @@ void test_log(char *text){
  */
 int regist_event(int fcgi_fd,void (*do_accept())){
 
-    evutil_socket_t listener;
-    struct sockaddr_in sin;
+//     evutil_socket_t listener;
+//     struct sockaddr_in sin;
+//     struct event_base *base;
+//     struct event *listener_event;
+//     base = event_base_new();//初始化libevent
+//     if (!base)  
+//         return false; /*XXXerr*/  
+//     sin.sin_family = AF_INET;  
+//     sin.sin_addr.s_addr = 0;//本机  
+//     sin.sin_port = htons(9002); 
+//     listener = socket(AF_INET, SOCK_STREAM, 0);
+//     if (bind(listener, (struct sockaddr*)&sin, sizeof(sin)) < 0)  
+//     {  
+//         php_printf("bind");  
+//         return false;  
+// 　　 }
+
+//     if (listen(listener, 16)<0)  
+// 　　 {  
+// 　　     php_printf("listen");  
+// 　　     return false;  
+// 　　 }
+
+//     //set coroutineinfo
+//     SG(coroutine_info).base = base;
+//     SG(coroutine_info).fcgi_fd = listener;
+
+//     char a[200];
+//     sprintf(a,"========= libevent base loop start ---fcgi_fd:%d ===== \n",listener);
+//     SG(coroutine_info).test_log(a);
+
+//     listener_event = event_new(base, listener, EV_READ|EV_PERSIST, do_accept, (void*)base);
+//     evutil_make_socket_nonblocking(listener);
+//     /* 添加事件 */  
+//     event_add(listener_event, NULL);
+//     // event_base_dispatch(base);
+//     event_base_loop(base,0);
+
+
+    char a[200];
+    sprintf(a,"====2===== libevent base loop start ---fcgi_fd:%d ===== \n",fcgi_fd);
+
+    SG(coroutine_info).test_log(a);
+
     struct event_base *base;
     struct event *listener_event;
     base = event_base_new();//初始化libevent
     if (!base)  
-        return false; /*XXXerr*/  
-    sin.sin_family = AF_INET;  
-    sin.sin_addr.s_addr = 0;//本机  
-    sin.sin_port = htons(9002); 
-    listener = socket(AF_INET, SOCK_STREAM, 0);
-    if (bind(listener, (struct sockaddr*)&sin, sizeof(sin)) < 0)  
-    {  
-        php_printf("bind");  
-        return false;  
-　　 }
-
-    if (listen(listener, 16)<0)  
-　　 {  
-　　     php_printf("listen");  
-　　     return false;  
-　　 }
-
-    //set coroutineinfo
-    SG(coroutine_info).base = base;
-    SG(coroutine_info).fcgi_fd = listener;
-
-    char a[200];
-    sprintf(a,"========= libevent base loop start ---fcgi_fd:%d ===== \n",listener);
+        return false; //libevent 初始化失败 
+    
+    sprintf(a,"========= libevent base loop start ---fcgi_fd:%d ===== \n",fcgi_fd);
     SG(coroutine_info).test_log(a);
 
-    listener_event = event_new(base, listener, EV_READ|EV_PERSIST, do_accept, (void*)base);
-    evutil_make_socket_nonblocking(listener);
+    listener_event = event_new(base, fcgi_fd, EV_READ|EV_PERSIST, do_accept, base);
+    // evutil_make_socket_nonblocking(fcgi_fd);
+
     /* 添加事件 */  
     event_add(listener_event, NULL);
-    // event_base_dispatch(base);
-    event_base_loop(base,0);
-
-
-    // char a[200];
-    // sprintf(a,"====2===== libevent base loop start ---fcgi_fd:%d ===== \n",fcgi_fd);
-
-    // SG(coroutine_info).test_log(a);
-
-    // struct event_base *base;
-    // struct event *listener_event;
-    // base = event_base_new();//初始化libevent
-    // if (!base)  
-    //     return false; //libevent 初始化失败 
-    
-    // sprintf(a,"========= libevent base loop start ---fcgi_fd:%d ===== \n",fcgi_fd);
-    // SG(coroutine_info).test_log(a);
-
-    // listener_event = event_new(base, fcgi_fd, EV_READ|EV_PERSIST, do_accept, base);
-    // // evutil_make_socket_nonblocking(fcgi_fd);
-
-    // /* 添加事件 */  
-    // event_add(listener_event, NULL);
-    // event_base_dispatch(base);
+    event_base_dispatch(base);
 
     return true;
 }
