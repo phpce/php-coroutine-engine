@@ -1854,6 +1854,7 @@ ZEND_API int zend_startup_module_ex(zend_module_entry *module) /* {{{ */
 static int zend_startup_module_zval(zval *zv) /* {{{ */
 {
 	zend_module_entry *module = Z_PTR_P(zv);
+
 	return (zend_startup_module_ex(module) == SUCCESS) ? ZEND_HASH_APPLY_KEEP : ZEND_HASH_APPLY_REMOVE;
 }
 /* }}} */

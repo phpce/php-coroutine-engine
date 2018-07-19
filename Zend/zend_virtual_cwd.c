@@ -524,31 +524,29 @@ CWD_API void virtual_cwd_shutdown(void) /* {{{ */
 #endif
 // #ifndef ZTS
 	free(main_cwd_state.cwd); /* Don't use CWD_STATE_FREE because the non global states will probably use emalloc()/efree() */
-	main_cwd_state.cwd = NULL;
+	// main_cwd_state.cwd = NULL;
 // #endif
 }
 /* }}} */
 
 CWD_API int virtual_cwd_activate(void) /* {{{ */
 {
+	if (CWDG(cwd).cwd == NULL) {
+		CWD_STATE_COPY(&CWDG(cwd), &main_cwd_state);
+	}
+	
+	// virtual_cwd_globals* cwd = (virtual_cwd_globals*)ts_resource_ex(cwd_globals_id,NULL);
+	// if (cwd->cwd.cwd == NULL && main_cwd_state.cwd != NULL) {
 
-
-
-	virtual_cwd_globals* cwd = (virtual_cwd_globals*)ts_resource_ex(cwd_globals_id,NULL);
-	// if (CWDG(cwd).cwd == NULL) {
-	// 	CWD_STATE_COPY(&CWDG(cwd), &main_cwd_state);
-	// }
-	if (cwd->cwd.cwd == NULL && main_cwd_state.cwd != NULL) {
-
-		cwd->cwd.cwd_length = main_cwd_state.cwd_length;
-		char* _cwd = (char *) emalloc(cwd->cwd.cwd_length+1);
-		char* _cwd2 = (char *) emalloc(cwd->cwd.cwd_length+1);
-		memset(_cwd2,'\0',cwd->cwd.cwd_length+1);
-		memcpy(_cwd2, main_cwd_state.cwd, cwd->cwd.cwd_length+1);
-		cwd->cwd.cwd = _cwd2;
+	// 	cwd->cwd.cwd_length = main_cwd_state.cwd_length;
+	// 	char* _cwd = (char *) emalloc(cwd->cwd.cwd_length+1);
+	// 	char* _cwd2 = (char *) emalloc(cwd->cwd.cwd_length+1);
+	// 	memset(_cwd2,'\0',cwd->cwd.cwd_length+1);
+	// 	memcpy(_cwd2, main_cwd_state.cwd, cwd->cwd.cwd_length+1);
+	// 	cwd->cwd.cwd = _cwd2;
 		
 
-	}
+	// }
 	return 0;
 }
 /* }}} */
