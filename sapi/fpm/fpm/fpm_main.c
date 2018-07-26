@@ -112,11 +112,10 @@ int __riscosify_control = __RISCOSIFY_STRICT_UNIX_SPECS;
 
 // coroutine begin ====
 #include "ext/standard/fpm_coroutine.h"
-
 #define COROUTINE_INIT_START reset_tsrm_tls_id_count();\
-	for(int j=0;j<coroutine_count;j++){\
-        set_force_thread_id(j);\
-        tsrm_set_interpreter_context(get_tsrm_tls_entry(j));\
+	for(coroutine_index=0;coroutine_index<coroutine_count;coroutine_index++){\
+        set_force_thread_id(coroutine_index);\
+        tsrm_set_interpreter_context(get_tsrm_tls_entry(coroutine_index));\
 
 #define COROUTINE_INIT_END };\
         set_force_thread_id(0);\
@@ -2198,9 +2197,10 @@ int coroutine_count = 5;
     tsrm_set_interpreter_context(get_tsrm_tls_entry(0));
 #endif
 
+    int coroutine_index = 0;
     void* main_context = get_tsrm_tls_entry(0);
 
-    init_coroutine_static();//初始化context池  
+    init_coroutine_static();//初始化context池
 
     //p ((sapi_globals_struct* )tsrm_tls_table[2]->storage[1])->coroutine_info
     //初始化全部协程
@@ -2212,19 +2212,19 @@ COROUTINE_INIT_START
     cgi_sapi_module.php_ini_ignore_cwd = 1;
 
           
-    printf("get_tsrm_tls_entry:%d,  \n",get_tsrm_tls_entry(j));
+    printf("get_tsrm_tls_entry:%d,  \n",get_tsrm_tls_entry(coroutine_index));
 	printf("coro_info:%d \n", SG(coroutine_info));
 
 
     SG(coroutine_info).close_request = close_request;//请求关闭的回调函数
     SG(coroutine_info).fpm_request_executing = fpm_request_executing_ex;//请求关闭的回调函数
     SG(coroutine_info).init_request = init_request;//请求关闭的回调函数
-    SG(coroutine_info).idx = j;
+    SG(coroutine_info).idx = coroutine_index;
     init_coroutine_info();
 
     // printf("coro_info:%d ,get_tsrm_tls_entry:%d,close_request:%d,SG(coroutine_info).close_request:%d,SG(coroutine_info).idx:%d   \n", SG(coroutine_info),get_tsrm_tls_entry(j),close_request,SG(coroutine_info).close_request,SG(coroutine_info).idx);
 
-    init_coroutine_context(get_tsrm_tls_entry(j),j);//初始化context
+    init_coroutine_context(get_tsrm_tls_entry(coroutine_index),coroutine_index);//初始化context
 COROUTINE_INIT_END
     
 
