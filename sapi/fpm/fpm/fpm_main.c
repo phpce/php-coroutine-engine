@@ -137,7 +137,7 @@ static void (*php_php_import_environment_variables)(zval *array_ptr);
 static int parent = 1;
 #endif
 
-static int request_body_fd;
+// static int request_body_fd;
 static int fpm_is_running = 0;
 
 
@@ -498,13 +498,16 @@ static size_t sapi_cgi_read_post(char *buffer, size_t count_bytes) /* {{{ */
 	}
 	while (read_bytes < count_bytes) {
 		fcgi_request *request = (fcgi_request*) SG(server_context);
-		if (request_body_fd == -1) {
+		// if (request_body_fd == -1) {
+		if (SG(coroutine_info).request_body_fd == -1) {
 			char *request_body_filename = FCGI_GETENV(request, "REQUEST_BODY_FILE");
 
 			if (request_body_filename && *request_body_filename) {
-				request_body_fd = open(request_body_filename, O_RDONLY);
+				// request_body_fd = open(request_body_filename, O_RDONLY);
+				SG(coroutine_info).request_body_fd = open(request_body_filename, O_RDONLY);
 
-				if (0 > request_body_fd) {
+				// if (0 > request_body_fd) {
+				if (0 > SG(coroutine_info).request_body_fd) {
 					php_error(E_WARNING, "REQUEST_BODY_FILE: open('%s') failed: %s (%d)",
 							request_body_filename, strerror(errno), errno);
 					return 0;
@@ -513,10 +516,12 @@ static size_t sapi_cgi_read_post(char *buffer, size_t count_bytes) /* {{{ */
 		}
 
 		/* If REQUEST_BODY_FILE variable not available - read post body from fastcgi stream */
-		if (request_body_fd < 0) {
+		// if (request_body_fd < 0) {
+		if (SG(coroutine_info).request_body_fd < 0) {
 			tmp_read_bytes = fcgi_read(request, buffer + read_bytes, count_bytes - read_bytes);
 		} else {
-			tmp_read_bytes = read(request_body_fd, buffer + read_bytes, count_bytes - read_bytes);
+			// tmp_read_bytes = read(request_body_fd, buffer + read_bytes, count_bytes - read_bytes);
+			tmp_read_bytes = read(SG(coroutine_info).request_body_fd, buffer + read_bytes, count_bytes - read_bytes);
 		}
 		if (tmp_read_bytes <= 0) {
 			break;
@@ -1830,15 +1835,15 @@ void fpm_request_executing_ex(){
 }
 
 void close_request(){
-    char a[200];
-    sprintf(a,"close request request_body_fd:%d\n",request_body_fd);
 
-    test_log(a);
-    //todo
     // if (UNEXPECTED(request_body_fd != -1)) {
     //     close(request_body_fd);
     // }
     // request_body_fd = -2;
+    if (UNEXPECTED(SG(coroutine_info).request_body_fd != -1)) {
+        close(SG(coroutine_info).request_body_fd);
+    }
+    SG(coroutine_info).request_body_fd = -2;
     
     if (UNEXPECTED(EG(exit_status) == 255)) {
         if (CGIG(error_header) && *CGIG(error_header)) {
@@ -1850,165 +1855,18 @@ void close_request(){
         }
     }
 
-    test_log("close_request === 2 ===\n");
-
-    // fpm_request_end();
-
-    test_log("close_request === 3 ===\n");
-
+    fpm_request_end();
     fpm_log_write(NULL);
 
-    test_log("close_request === 4 ===\n");
+    efree(SG(request_info).path_translated);
+    SG(request_info).path_translated = NULL;
 
-    //todo
-    // efree(SG(request_info).path_translated);
-    // SG(request_info).path_translated = NULL;
-
-    test_log("close_request === 5 ===\n");
-
-    // php_request_shutdown((void *) 0);
-
-    zend_bool report_memleaks;
-
-    report_memleaks = PG(report_memleaks);
-
-    /* EG(current_execute_data) points into nirvana and therefore cannot be safely accessed
-     * inside zend_executor callback functions.
-     */
-    EG(current_execute_data) = NULL;
-
-    php_deactivate_ticks();
-
-    /* 1. Call all possible shutdown functions registered with register_shutdown_function() */
-    if (PG(modules_activated)) zend_try {
-        php_call_shutdown_functions();
-    } zend_end_try();
-
-    /* 2. Call all possible __destruct() functions */
-    zend_try {
-        zend_call_destructors();
-    } zend_end_try();
-
-    /* 3. Flush all output buffers */
-    zend_try {
-        zend_bool send_buffer = SG(request_info).headers_only ? 0 : 1;
-
-        if (CG(unclean_shutdown) && PG(last_error_type) == E_ERROR &&
-            (size_t)PG(memory_limit) < zend_memory_usage(1)
-        ) {
-            send_buffer = 0;
-        }
-
-        if (!send_buffer) {
-            php_output_discard_all();
-        } else {
-            php_output_end_all();
-        }
-    } zend_end_try();
-
-    /* 4. Reset max_execution_time (no longer executing php code after response sent) */
-    zend_try {
-        zend_unset_timeout();
-    } zend_end_try();
-
-    /* 5. Call all extensions RSHUTDOWN functions */
-    if (PG(modules_activated)) {
-        zend_deactivate_modules();
-    }
-
-    /* 6. Shutdown output layer (send the set HTTP headers, cleanup output handlers, etc.) */
-    zend_try {
-        php_output_deactivate();
-    } zend_end_try();
-
-    /* 7. Free shutdown functions */
-    if (PG(modules_activated)) {
-        php_free_shutdown_functions();
-    }
-
-    /* 8. Destroy super-globals */
-    zend_try {
-        int i;
-
-        for (i=0; i<NUM_TRACK_VARS; i++) {
-            zval_ptr_dtor(&PG(http_globals)[i]);
-        }
-    } zend_end_try();
-
-    /* 9. free request-bound globals */
-    // php_free_request_globals();
-    if (PG(last_error_message)) {
-        free(PG(last_error_message));
-        PG(last_error_message) = NULL;
-    }
-    if (PG(last_error_file)) {
-        free(PG(last_error_file));
-        PG(last_error_file) = NULL;
-    }
-    if (PG(php_sys_temp_dir)) {
-        efree(PG(php_sys_temp_dir));
-        PG(php_sys_temp_dir) = NULL;
-    }
-
-    /* 10. Shutdown scanner/executor/compiler and restore ini entries */
-    zend_deactivate();
-
-    /* 11. Call all extensions post-RSHUTDOWN functions */
-    zend_try {
-        zend_post_deactivate_modules();
-    } zend_end_try();
-
-
-    sprintf(a,"====SG(server_context):%d===\n",SG(server_context));
-
-    SG(coroutine_info).test_log(a);
-
-    sapi_coroutine_context* context = SG(coroutine_info).context;
-
-    /* 12. SAPI related shutdown (free stuff) */
-    zend_try {
-        sapi_deactivate();
-    } zend_end_try();
-
-
-
-//     virtual_cwd_deactivate();
-
-
-//     zend_try {
-//         php_shutdown_stream_hashes();
-//     } zend_end_try();
-
-
-//     zend_interned_strings_restore();
-//     zend_try {
-//         shutdown_memory_manager(CG(unclean_shutdown) || !report_memleaks, 0);
-//     } zend_end_try();
-
-
-//     zend_try {
-//         zend_unset_timeout();
-//     } zend_end_try();
-
-// #ifdef PHP_WIN32
-//     if (PG(com_initialized)) {
-//         CoUninitialize();
-//         PG(com_initialized) = 0;
-//     }
-// #endif
-
-// #ifdef HAVE_DTRACE
-//     DTRACE_REQUEST_SHUTDOWN(SAFE_FILENAME(SG(request_info).path_translated), SAFE_FILENAME(SG(request_info).request_uri), (char *)SAFE_FILENAME(SG(request_info).request_method));
-// #endif
-
-    test_log("close_request === 6 ===\n");
+    php_request_shutdown((void *) 0);
 
     requests++;
     if (UNEXPECTED(max_requests && (requests == max_requests))) {
         fcgi_request_set_keep(SG(coroutine_info).context->request, 0);
-        test_log("close_request === 7 ===\n");
         fcgi_finish_request(SG(coroutine_info).context->request, 0);
-        test_log("close_request === 8 ===\n");
         //break;
         return;
     }
@@ -2017,9 +1875,6 @@ void close_request(){
 
 void do_accept(evutil_socket_t listener, short event, void *arg)  
 {  
-	char a[200];
-	sprintf(a,"========= do_accept ===== \n");
-
     struct event_base *base = arg;  
     struct sockaddr_storage ss;  
     socklen_t slen = sizeof(ss);  
@@ -2030,15 +1885,6 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
     SG(sapi_started) = 0;
 
     SG(coroutine_info).base = base;
-
-    // printf("%s\n", "======");
-
-    // set_force_thread_id(0);
-    // tsrm_set_interpreter_context(get_tsrm_tls_entry(0));//切换协程
-
-    
-    sprintf(a,"========= do_accept ---fd:%d ===== \n",fd);
-    SG(coroutine_info).test_log(a);
 
     //上下文内私有
     zend_file_handle file_handle; 
@@ -2051,11 +1897,13 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
     //初始化回调函数（来源于）while (EXPECTED(fcgi_accept_request(request) >= 0))
     init_request_callback(request);//初始化request回调，fpm_init_request中设置的
 
+    //------old logic
     char *primary_script = NULL;
-	request_body_fd = -1;
+	// request_body_fd = -1;
+	SG(coroutine_info).request_body_fd = -1;
 
     SG(coroutine_info).init_request((void*)request);
- //    SG(server_context) = (void *) request;
+ 	// SG(server_context) = (void *) request;
 	// init_request_info();//初始化request_info
 	// fpm_request_info();//初始化   fpm_scoreboard_proc_s
 
@@ -2126,7 +1974,6 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
 
 	fpm_request_executing();//proc->request_stage  改变状态FPM_REQUEST_EXECUTING
 
-
     int r = setjmp(*SG(coroutine_info).context->req_ptr);
     if(r == CORO_DEFAULT){
         php_execute_script_coro(&file_handle);//执行代码
@@ -2138,9 +1985,7 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
 
 fastcgi_request_done2:
 	
-    // printf("%s\n", "ddd");
     close_request();
-
     free_coroutine_context(SG(coroutine_info).context);
 }  
 

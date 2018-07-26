@@ -168,6 +168,7 @@ typedef struct _g_sapi_coroutine_info{
     void(*init_request)(void *request);
     void(*free_old_cwd)(char *old_cwd,zend_bool use_heap);
     int idx;
+    int request_body_fd;
 } sapi_coroutine_info;
 
 typedef struct _sapi_globals_struct {
