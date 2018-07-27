@@ -1621,20 +1621,13 @@ ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
     write_coroutine_context(context);
     //for coroutine
     //设置 锚点
-    test_log("defulet run \n");
     int r = setjmp(*context->buf_ptr);
 
-    char t[200];
-    sprintf(t,"====111=zend_execute_coro:%d,*buf_ptr:%d\n",SG(coroutine_info).context,*context->buf_ptr);
-    test_log(t);
-
     if(r == CORO_DEFAULT){//first run
-        test_log("jump set core_default \n");
         EG(current_execute_data) = context->execute_data;
         zend_execute_ex(EG(current_execute_data));
         context->coro_state = CORO_END;
     }else{
-        test_log("first run code yield \n");
         longjmp(*context->req_ptr,CORO_YIELD);
     }
 
@@ -1834,7 +1827,7 @@ void fpm_request_executing_ex(){
     fpm_request_executing();
 }
 
-void close_request(){
+int close_request(){
 
     // if (UNEXPECTED(request_body_fd != -1)) {
     //     close(request_body_fd);
@@ -1868,8 +1861,9 @@ void close_request(){
         fcgi_request_set_keep(SG(coroutine_info).context->request, 0);
         fcgi_finish_request(SG(coroutine_info).context->request, 0);
         //break;
-        return;
+        return 0;
     }
+    return 1;
     /* end of fastcgi loop */
 }
 
@@ -1979,13 +1973,14 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
         php_execute_script_coro(&file_handle);//执行代码
         goto fastcgi_request_done2;
     }else if(r == CORO_YIELD){
-        test_log("reqest yield \n");
         return;
     }
 
 fastcgi_request_done2:
 	
-    close_request();
+    if(!close_request()){
+    	// return false; //todo 请求达到最大数量 结束请求
+    }
     free_coroutine_context(SG(coroutine_info).context);
 }  
 

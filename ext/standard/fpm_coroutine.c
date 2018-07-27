@@ -81,19 +81,12 @@ int regist_event(int fcgi_fd,void (*do_accept())){
 //     event_base_loop(base,0);
 
 
-    char a[200];
-    sprintf(a,"====2===== libevent base loop start ---fcgi_fd:%d ===== \n",fcgi_fd);
-
-    SG(coroutine_info).test_log(a);
 
     struct event_base *base;
     struct event *listener_event;
     base = event_base_new();//初始化libevent
     if (!base)  
         return false; //libevent 初始化失败 
-    
-    sprintf(a,"========= libevent base loop start ---fcgi_fd:%d ===== \n",fcgi_fd);
-    SG(coroutine_info).test_log(a);
 
     listener_event = event_new(base, fcgi_fd, EV_READ|EV_PERSIST, do_accept, base);
     // evutil_make_socket_nonblocking(fcgi_fd);
@@ -190,10 +183,6 @@ void resume_coroutine_context(sapi_coroutine_context* context){
         zend_execute_ex(EG(current_execute_data));
         context->coro_state = CORO_END;
 
-        char a[200];
-        sprintf(a,"write_coroutine_context   execute_data_ptr:%d,prev_execute_data:%d\n",context->execute_data,context->prev_execute_data);
-        test_log(a);
-
         zend_exception_restore();
         zend_try_exception_handler();
         if (EG(exception)) {
@@ -220,7 +209,7 @@ void resume_coroutine_context(sapi_coroutine_context* context){
         free_coroutine_context(SG(coroutine_info).context);
 
     }else{
-        test_log("resume code yield \n");
+
     }
 }
 
@@ -243,45 +232,31 @@ void release_coroutine_context(sapi_coroutine_context* context){
 
     if(SG(coroutine_info).context_count>0){
 
-        test_log("free === 1 ===\n");
-
         SG(coroutine_info).context_count--;
-        test_log("free === 1.1 ===\n");
         //unlink
         context->prev->next = context->next;
         context->next->prev = context->prev;
-        test_log("free === 1.2 ===\n");
-        //todo free all data
-        char a[200];
-
-        sprintf(a,"free === 1.3 === context->buf_ptr:%d,context->req_ptr:%d,*context->buf_ptr:%d,*context->req_ptr:%d   ===\n",context->buf_ptr,context->req_ptr,*context->buf_ptr,*context->req_ptr);
-        test_log(a);
 
         // efree(context->buf_ptr);
         // efree(context->req_ptr);
-        test_log("free === 1.4 ===\n");
         // context->buf_ptr = NULL;
         // context->req_ptr = NULL;
 
-        test_log("free === 2 ===\n");
+
         zend_vm_stack_free_call_frame(context->execute_data); //释放execute_data:销毁所有的PHP变量
         context->execute_data = NULL;
-        test_log("free === 2.1 ===\n");
+
         // efree(context->func_cache);
         // context->func_cache = NULL;
 
 
-        test_log("free === 3 ===\n");
-
         destroy_op_array(context->op_array);
         efree_size(context->op_array, sizeof(zend_op_array));
 
-        test_log("free === 4 ===\n");
 
-        test_log("free === 5 ===\n");
         // efree(context);
         // context = NULL;
-        test_log("free === 6 ===\n");
+
         if(SG(coroutine_info).context_count == 0){
             SG(coroutine_info).context = NULL;
         }
