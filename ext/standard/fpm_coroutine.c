@@ -344,7 +344,7 @@ sapi_coroutine_context* use_coroutine_context(){
  * todo 上下文池化,不池化，会内存泄漏，100多个开始崩溃
  * 在这个函数执行之后，会适用 load_coroutine_context write_coroutine_context将context 中保存的信息导入导出
  */
-void init_coroutine_context(void* tsrm_context,THREAD_T idx){
+void init_coroutine_context(void* tsrm_context,int idx){
     //初始化context 上下文
     sapi_coroutine_context *context = malloc(sizeof(sapi_coroutine_context));
     context->coro_state = CORO_DEFAULT;

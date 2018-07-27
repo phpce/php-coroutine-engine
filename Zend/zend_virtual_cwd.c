@@ -515,9 +515,10 @@ CWD_API void virtual_cwd_startup(void) /* {{{ */
 
 CWD_API void virtual_cwd_shutdown(void) /* {{{ */
 {
-#ifndef ZTS
-	// cwd_globals_dtor(&cwd_globals);
+#ifdef ZTS
 	cwd_globals_dtor(ts_resource(cwd_globals_id));
+#else
+	cwd_globals_dtor(&cwd_globals);
 #endif
 #if (defined(ZEND_WIN32) || defined(NETWARE)) && defined(ZTS)
 	tsrm_mutex_free(cwd_mutex);
