@@ -1611,8 +1611,6 @@ ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
 	// i_init_execute_data(execute_data, op_array, return_value);
 	zend_init_execute_data(execute_data, op_array, return_value);
 
-	context->execute_data = execute_data;
-
 	int r = setjmp(*context->buf_ptr);
     if(r == CORO_DEFAULT){//first run
 		zend_execute_ex(execute_data);
