@@ -111,46 +111,11 @@ void load_coroutine_context(sapi_coroutine_context *context){
 
     SG(coroutine_info).context = context;//全局当前context指针
 
-    EG(vm_stack) = context->vm_stack;
-    EG(vm_stack_top) = context->vm_stack_top;
-    EG(vm_stack_end) = context->vm_stack_end;
-
     // SG(server_context) = (void *)context->request;//load request
     EG(current_execute_data) = context->prev_execute_data;
 
-
-    
-    SG(sapi_headers) = context->sapi_headers;
-
-
 }
 
-//将全局变量中的数据载入Context
-void write_coroutine_context(sapi_coroutine_context *context){
-    context->vm_stack = EG(vm_stack);
-    context->vm_stack_top = EG(vm_stack_top);
-    context->vm_stack_end = EG(vm_stack_end);
-
-    //todo 需要研究一下scoreboard，是否需要将里面的部分变量写入context
-
-    context->sapi_headers = SG(sapi_headers);
-    // context->request_info = SG(request_info);
-
-
-    char a[200];
-    sprintf(a,"write_coroutine_context   execute_data_ptr:%d,prev_execute_data:%d\n",context->execute_data,context->prev_execute_data);
-    test_log(a);
-
-
-
-    // *context->execute_data->symbol_table = EG(symbol_table);
-
-    // context->symbol_table = EG(symbol_table);
-
-    // zend_hash_copy(&context->symbol_table,&EG(symbol_table),NULL);
-
-
-}
 
 void resume_coroutine_context(sapi_coroutine_context* context){
 
@@ -216,7 +181,6 @@ void yield_coroutine_context(){
     context->coro_state = CORO_YIELD;
 
     context->prev_execute_data = EG(current_execute_data)->prev_execute_data;
-    // write_coroutine_context(SG(coroutine_info).context);
 
     longjmp(*context->buf_ptr,CORO_YIELD);
 }

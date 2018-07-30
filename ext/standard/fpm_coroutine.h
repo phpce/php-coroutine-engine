@@ -26,7 +26,6 @@ void init_coroutine_context(void* tsrm_context,int idx);
 sapi_coroutine_context* use_coroutine_context();
 void init_coroutine_set_request(sapi_coroutine_context* context,fcgi_request *request);
 void load_coroutine_context(sapi_coroutine_context *context);
-void write_coroutine_context(sapi_coroutine_context *context);
 
 
 void init_coroutine_info();
