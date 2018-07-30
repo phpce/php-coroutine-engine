@@ -112,7 +112,7 @@ int __riscosify_control = __RISCOSIFY_STRICT_UNIX_SPECS;
 
 // coroutine begin ====
 #include "ext/standard/fpm_coroutine.h"
-#define COROUTINE_INIT_START reset_tsrm_tls_id_count();\
+#define COROUTINE_INIT_START \
 	for(coroutine_index=0;coroutine_index<coroutine_count;coroutine_index++){\
         set_force_thread_id(coroutine_index);\
         tsrm_set_interpreter_context(get_tsrm_tls_entry(coroutine_index));\
@@ -2051,18 +2051,11 @@ COROUTINE_INIT_START
     cgi_sapi_module.php_ini_path_override = NULL;
     cgi_sapi_module.php_ini_ignore_cwd = 1;
 
-          
-    printf("get_tsrm_tls_entry:%d,  \n",get_tsrm_tls_entry(coroutine_index));
-	printf("coro_info:%d \n", SG(coroutine_info));
-
-
     SG(coroutine_info).close_request = close_request;//请求关闭的回调函数
     SG(coroutine_info).fpm_request_executing = fpm_request_executing_ex;//请求关闭的回调函数
     SG(coroutine_info).init_request = init_request;//请求关闭的回调函数
     SG(coroutine_info).idx = coroutine_index;
     init_coroutine_info();
-
-    // printf("coro_info:%d ,get_tsrm_tls_entry:%d,close_request:%d,SG(coroutine_info).close_request:%d,SG(coroutine_info).idx:%d   \n", SG(coroutine_info),get_tsrm_tls_entry(j),close_request,SG(coroutine_info).close_request,SG(coroutine_info).idx);
 
     init_coroutine_context(get_tsrm_tls_entry(coroutine_index),coroutine_index);//初始化context
 COROUTINE_INIT_END

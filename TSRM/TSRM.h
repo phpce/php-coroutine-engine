@@ -153,7 +153,6 @@ TSRM_API void *get_tsrm_tls_entry(int idx);
 TSRM_API void create_tsrm_tls_entry(int idx);
 TSRM_API void set_force_thread_id(int thread_id);
 TSRM_API int get_force_thread_id(void);
-TSRM_API void reset_tsrm_tls_id_count(void);
 TSRM_API void *tsrm_set_interpreter_context(void *new_ctx);
 TSRM_API void tsrm_free_interpreter_context(void *context);
 

@@ -1793,6 +1793,39 @@ ZEND_API int add_property_zval_ex(zval *arg, const char *key, size_t key_len, zv
 }
 /* }}} */
 
+ZEND_API int zend_startup_module_ex2(zend_module_entry *module) /* {{{ */
+{
+	size_t name_len;
+	zend_string *lcname;
+
+	if (module->module_started) {
+		return SUCCESS;
+	}
+	module->module_started = 1;
+
+	/* Initialize module globals */
+	if (module->globals_size) {
+#ifdef ZTS
+		ts_allocate_id(module->globals_id_ptr, module->globals_size, (ts_allocate_ctor) module->globals_ctor, (ts_allocate_dtor) module->globals_dtor);
+#else
+		if (module->globals_ctor) {
+			module->globals_ctor(module->globals_ptr);
+		}
+#endif
+	}
+	if (module->module_startup_func) {
+		EG(current_module) = module;
+		if (module->module_startup_func(module->type, module->module_number)==FAILURE) {
+			zend_error_noreturn(E_CORE_ERROR,"Unable to start %s module", module->name);
+			EG(current_module) = NULL;
+			return FAILURE;
+		}
+		EG(current_module) = NULL;
+	}
+	return SUCCESS;
+}
+/* }}} */
+
 ZEND_API int zend_startup_module_ex(zend_module_entry *module) /* {{{ */
 {
 	size_t name_len;
@@ -1851,10 +1884,16 @@ ZEND_API int zend_startup_module_ex(zend_module_entry *module) /* {{{ */
 }
 /* }}} */
 
+static int zend_startup_module_zval2(zval *zv) /* {{{ */
+{
+	zend_module_entry *module = Z_PTR_P(zv);
+	zend_startup_module_ex2(module);
+	return ZEND_HASH_APPLY_KEEP;
+}
+
 static int zend_startup_module_zval(zval *zv) /* {{{ */
 {
 	zend_module_entry *module = Z_PTR_P(zv);
-
 	return (zend_startup_module_ex(module) == SUCCESS) ? ZEND_HASH_APPLY_KEEP : ZEND_HASH_APPLY_REMOVE;
 }
 /* }}} */
@@ -1966,12 +2005,17 @@ ZEND_API void zend_collect_module_handlers(void) /* {{{ */
 ZEND_API int zend_startup_modules(void) /* {{{ */
 {
 	zend_hash_sort_ex(&module_registry, zend_sort_modules, NULL, 0);
-	// zend_module_entry *mob;
-	// ZEND_HASH_FOREACH_PTR(&module_registry, mob) {
-	// 	fprintf(stderr, "-----in  ---- zend_hash_apply----module_ptr:%d,name:%s,globals_size:%d,nNumUsed:%d\n",mob,mob->name,mob->globals_size,module_registry.nNumUsed );
-	// } ZEND_HASH_FOREACH_END();
-	zend_hash_apply(&module_registry, zend_startup_module_zval);
-	// zend_hash_apply_test(&module_registry, zend_startup_module_zval);
+	zend_module_entry *mob;
+	ZEND_HASH_FOREACH_PTR(&module_registry, mob) {
+		// fprintf(stderr, "-----in  ---- zend_hash_apply----module_ptr:%d,name:%s,globals_size:%d,nNumUsed:%d\n",mob,mob->name,mob->globals_size,module_registry.nNumUsed );
+	} ZEND_HASH_FOREACH_END();
+
+	// if(get_force_thread_id()>0){
+	// 	zend_hash_apply(&module_registry, zend_startup_module_zval2);
+	// }else{
+		zend_hash_apply(&module_registry, zend_startup_module_zval);
+	// }
+
 	return SUCCESS;
 }
 /* }}} */

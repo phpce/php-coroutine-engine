@@ -1517,7 +1517,6 @@ ZEND_API void ZEND_FASTCALL zend_hash_apply(HashTable *ht, apply_func_t apply_fu
 	HASH_UNPROTECT_RECURSION(ht);
 }
 
-
 ZEND_API void ZEND_FASTCALL zend_hash_apply_with_argument(HashTable *ht, apply_func_arg_t apply_func, void *argument)
 {
     uint32_t idx;

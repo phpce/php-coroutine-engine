@@ -43,9 +43,47 @@ typedef struct {
 } tsrm_resource_type;
 
 
+typedef struct _rsrc_id_map_link rsrc_id_map_link;
+struct _rsrc_id_map_link {
+	intptr_t value;
+	rsrc_id_map_link *next;
+};
+int rsrc_id_map_size = 100;
+rsrc_id_map_link** rsrc_id_map;
+
+//用于存储rsrc_id
+/* 从hashtable中查找rsrc_id地址，确认是否为新的（未使用过） */
+int rsrc_id_set_isnew(intptr_t rsrc_id_ptr){
+	int hash_value = THREAD_HASH_OF(rsrc_id_ptr,rsrc_id_map_size);
+
+	rsrc_id_map_link* link = rsrc_id_map[hash_value];
+
+	while(link){
+		if(link->value == rsrc_id_ptr){
+			return 0;
+		}else if(link->next){//有后续
+			link = link->next;
+		}else{//无后续
+			break;
+		}
+	}
+
+	//写入
+	rsrc_id_map_link* new_link = malloc(sizeof(rsrc_id_map_link));
+	new_link->next = NULL;
+	new_link->value = rsrc_id_ptr;
+	if(link){
+		link->next = new_link;
+	}else{
+		rsrc_id_map[hash_value] = new_link;
+	}
+
+	return 1;
+}
+
+
 /* The memory manager table */
 static tsrm_tls_entry	**tsrm_tls_table=NULL;
-static int 				*tsrm_tls_id_count=NULL;
 static int				tsrm_tls_table_size;
 static int 				force_thread_id = -1;//这个值不等于-1，代表协程状态
 static ts_rsrc_id		id_count;
@@ -131,6 +169,7 @@ static int32 tls_key;
 /* Startup TSRM (call once for the entire process) */
 TSRM_API int tsrm_startup(int expected_threads, int expected_resources, int debug_level, char *debug_filename)
 {
+	rsrc_id_map = (rsrc_id_map_link**) calloc(rsrc_id_map_size,sizeof(rsrc_id_map_link*));
 #if defined(GNUPTH)
 	pth_init();
 	pth_key_create(&tls_key, 0);
@@ -154,16 +193,6 @@ TSRM_API int tsrm_startup(int expected_threads, int expected_resources, int debu
 		TSRM_ERROR((TSRM_ERROR_LEVEL_ERROR, "Unable to allocate TLS table"));
 		return 0;
 	}
-
-
-	tsrm_tls_id_count = (int*) calloc(tsrm_tls_table_size,sizeof(int));
-	int *tsrm_id_count;
-	for(int i=0;i<tsrm_tls_table_size;i++){
-		tsrm_id_count = &tsrm_tls_id_count[i];
-		*tsrm_id_count=0;
-	}
-
-
 	id_count=0;
 
 	resource_types_table_size = expected_resources;
@@ -241,61 +270,57 @@ TSRM_API int get_force_thread_id(void){
 	return force_thread_id;
 }
 
-TSRM_API void reset_tsrm_tls_id_count(void){
-	for(int i=0;i<tsrm_tls_table_size;i++){
-		int *tmp_id_count = &tsrm_tls_id_count[i];
-		*tmp_id_count=id_count;
-	}
-}
-
-
-
-
-
 /* allocates a new thread-safe-resource id */
 TSRM_API ts_rsrc_id ts_allocate_id(ts_rsrc_id *rsrc_id, size_t size, ts_allocate_ctor ctor, ts_allocate_dtor dtor)
 {
-	int i,*tmp_id_count;
+	int isnew = rsrc_id_set_isnew((intptr_t)rsrc_id);
+	if(!isnew){
+		/**
+		 * 再次ts_allocate_id的时候，初始化当前协程的内存
+		 * 这里需要需要注意，当第一次ts_allocate_id,会将所有的内存进行初始化，并且创建构造函数
+		 * 但是有些协程存储的构造函数中，会包含调用其他全局变量宏。这样导致混乱
+		 * 所以这里进行补充，当再次被ts_allocate_id已经初始化过的rsrc_id时，只是重新调用构造函数
+		 * 
+		 * 对于模块的加载，这里调试了很多次，最终排查到的问题是这里的问题
+		 * 因为模块加载等特殊情况，有时候只有第一个协程会调用ts_allocate_id，但是其他协程没机会调用得到。
+		 * 这样就会在有些协程内，导致构造函数确实。所以改成第一次协程全部初始化构造函数，后面的在这里补充，重新初始化，就好了
+		 */
+		tsrm_tls_entry *p = tsrm_tls_table[force_thread_id];
 
-	if(force_thread_id <=0){//force_thread_id为-1(非协程)/0(第一个协程)时，才往下执行
-
-		TSRM_ERROR((TSRM_ERROR_LEVEL_CORE, "Obtaining a new resource id, %d bytes", size));
-
-		tsrm_mutex_lock(tsmm_mutex);
-
-		/* obtain a resource id */
-		*rsrc_id = TSRM_SHUFFLE_RSRC_ID(id_count++);
-		TSRM_ERROR((TSRM_ERROR_LEVEL_CORE, "Obtained resource id %d", *rsrc_id));
-
-		/* store the new resource type in the resource sizes table */
-		if (resource_types_table_size < id_count) {
-			resource_types_table = (tsrm_resource_type *) realloc(resource_types_table, sizeof(tsrm_resource_type)*id_count);
-			if (!resource_types_table) {
-				tsrm_mutex_unlock(tsmm_mutex);
-				TSRM_ERROR((TSRM_ERROR_LEVEL_ERROR, "Unable to allocate storage for resource"));
-				*rsrc_id = 0;
-				return 0;
-			}
-			resource_types_table_size = id_count;
+		if (resource_types_table[TSRM_UNSHUFFLE_RSRC_ID(*rsrc_id)].ctor) {//只初始化当前协程
+			resource_types_table[TSRM_UNSHUFFLE_RSRC_ID(*rsrc_id)].ctor(p->storage[TSRM_UNSHUFFLE_RSRC_ID(*rsrc_id)]);
 		}
-		resource_types_table[TSRM_UNSHUFFLE_RSRC_ID(*rsrc_id)].size = size;
-		resource_types_table[TSRM_UNSHUFFLE_RSRC_ID(*rsrc_id)].ctor = ctor;
-		resource_types_table[TSRM_UNSHUFFLE_RSRC_ID(*rsrc_id)].dtor = dtor;
-		resource_types_table[TSRM_UNSHUFFLE_RSRC_ID(*rsrc_id)].done = 0;
-
-		if(force_thread_id==0){
-			tmp_id_count = &tsrm_tls_id_count[force_thread_id];
-			*tmp_id_count = id_count;
-		}
-	}else{
-		tmp_id_count = &tsrm_tls_id_count[force_thread_id];
-		*rsrc_id = TSRM_SHUFFLE_RSRC_ID((*tmp_id_count)++);
+		return *rsrc_id;
 	}
+	
+	int i;
 
-	i = force_thread_id<0?0:force_thread_id;
+	TSRM_ERROR((TSRM_ERROR_LEVEL_CORE, "Obtaining a new resource id, %d bytes", size));
+
+	tsrm_mutex_lock(tsmm_mutex);
+
+	/* obtain a resource id */
+	*rsrc_id = TSRM_SHUFFLE_RSRC_ID(id_count++);
+	TSRM_ERROR((TSRM_ERROR_LEVEL_CORE, "Obtained resource id %d", *rsrc_id));
+
+	/* store the new resource type in the resource sizes table */
+	if (resource_types_table_size < id_count) {
+		resource_types_table = (tsrm_resource_type *) realloc(resource_types_table, sizeof(tsrm_resource_type)*id_count);
+		if (!resource_types_table) {
+			tsrm_mutex_unlock(tsmm_mutex);
+			TSRM_ERROR((TSRM_ERROR_LEVEL_ERROR, "Unable to allocate storage for resource"));
+			*rsrc_id = 0;
+			return 0;
+		}
+		resource_types_table_size = id_count;
+	}
+	resource_types_table[TSRM_UNSHUFFLE_RSRC_ID(*rsrc_id)].size = size;
+	resource_types_table[TSRM_UNSHUFFLE_RSRC_ID(*rsrc_id)].ctor = ctor;
+	resource_types_table[TSRM_UNSHUFFLE_RSRC_ID(*rsrc_id)].dtor = dtor;
+	resource_types_table[TSRM_UNSHUFFLE_RSRC_ID(*rsrc_id)].done = 0;
 
 	/* enlarge the arrays for the already active threads */
-	// for (i=0; i<tsrm_tls_table_size; i++) {
+	for (i=0; i<tsrm_tls_table_size; i++) {
 		tsrm_tls_entry *p = tsrm_tls_table[i];
 
 		while (p) {
@@ -305,7 +330,7 @@ TSRM_API ts_rsrc_id ts_allocate_id(ts_rsrc_id *rsrc_id, size_t size, ts_allocate
 				p->storage = (void *) realloc(p->storage, sizeof(void *)*id_count);
 				for (j=p->count; j<id_count; j++) {
 					p->storage[j] = (void *) malloc(resource_types_table[j].size);
-					if (resource_types_table[j].ctor) {
+					if (resource_types_table[j].ctor) {//只初始化当前协程
 						resource_types_table[j].ctor(p->storage[j]);
 					}
 				}
@@ -313,7 +338,7 @@ TSRM_API ts_rsrc_id ts_allocate_id(ts_rsrc_id *rsrc_id, size_t size, ts_allocate
 			}
 			p = p->next;
 		}
-	// }
+	}
 	tsrm_mutex_unlock(tsmm_mutex);
 
 	TSRM_ERROR((TSRM_ERROR_LEVEL_CORE, "Successfully allocated new resource id %d", *rsrc_id));
