@@ -185,45 +185,6 @@ void yield_coroutine_context(){
     longjmp(*context->buf_ptr,CORO_YIELD);
 }
 
-/**
- * 释放上下文  todo 内存泄漏，需要进一步处理
- */
-void release_coroutine_context(sapi_coroutine_context* context){
-    return;
-
-    if(SG(coroutine_info).context_count>0){
-
-        SG(coroutine_info).context_count--;
-        //unlink
-        context->prev->next = context->next;
-        context->next->prev = context->prev;
-
-        // efree(context->buf_ptr);
-        // efree(context->req_ptr);
-        // context->buf_ptr = NULL;
-        // context->req_ptr = NULL;
-
-
-        zend_vm_stack_free_call_frame(context->execute_data); //释放execute_data:销毁所有的PHP变量
-        context->execute_data = NULL;
-
-        // efree(context->func_cache);
-        // context->func_cache = NULL;
-
-
-        destroy_op_array(context->op_array);
-        efree_size(context->op_array, sizeof(zend_op_array));
-
-
-        // efree(context);
-        // context = NULL;
-
-        if(SG(coroutine_info).context_count == 0){
-            SG(coroutine_info).context = NULL;
-        }
-    }
-}
-
 void free_coroutine_context(sapi_coroutine_context* context){
     //先清理关系
     if(context->prev && context->next){
