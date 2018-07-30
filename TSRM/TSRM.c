@@ -276,23 +276,21 @@ TSRM_API ts_rsrc_id ts_allocate_id(ts_rsrc_id *rsrc_id, size_t size, ts_allocate
 	int isnew = rsrc_id_set_isnew((intptr_t)rsrc_id);
 	if(!isnew){
 		/**
-		 * 再次ts_allocate_id的时候，初始化当前协程的内存
-		 * 这里需要需要注意，当第一次ts_allocate_id,会将所有的内存进行初始化，并且创建构造函数
-		 * 但是有些协程存储的构造函数中，会包含调用其他全局变量宏。这样导致混乱
-		 * 所以这里进行补充，当再次被ts_allocate_id已经初始化过的rsrc_id时，只是重新调用构造函数
-		 * 
-		 * 对于模块的加载，这里调试了很多次，最终排查到的问题是这里的问题
-		 * 因为模块加载等特殊情况，有时候只有第一个协程会调用ts_allocate_id，但是其他协程没机会调用得到。
-		 * 这样就会在有些协程内，导致构造函数确实。所以改成第一次协程全部初始化构造函数，后面的在这里补充，重新初始化，就好了
+		 * 这里需要注意的逻辑调整:
+		 * ts_allocate_id函数在当同一个rsrc_id（通过相同内存地址判断）第一次执行的时候，会为所有协程分配内存
+		 * 但只会为当前协程/线程执行构造函数初始化数据
+		 * 当不是第一次调用的时候，会为当前协程/线程初始化数据。
+		 * 当所有协程都执行一遍，才会全部初始化完毕。
+		 * 这个特性主要针对在多协程/线程调用ts_allocate_id的时候，有些初始化方法会使用线程安全存储，
+		 * 若只在一个协程里调用会导致初始化不完整
 		 */
 		tsrm_tls_entry *p = tsrm_tls_table[force_thread_id];
-
 		if (resource_types_table[TSRM_UNSHUFFLE_RSRC_ID(*rsrc_id)].ctor) {//只初始化当前协程
 			resource_types_table[TSRM_UNSHUFFLE_RSRC_ID(*rsrc_id)].ctor(p->storage[TSRM_UNSHUFFLE_RSRC_ID(*rsrc_id)]);
 		}
 		return *rsrc_id;
 	}
-	
+
 	int i;
 
 	TSRM_ERROR((TSRM_ERROR_LEVEL_CORE, "Obtaining a new resource id, %d bytes", size));
@@ -330,7 +328,7 @@ TSRM_API ts_rsrc_id ts_allocate_id(ts_rsrc_id *rsrc_id, size_t size, ts_allocate
 				p->storage = (void *) realloc(p->storage, sizeof(void *)*id_count);
 				for (j=p->count; j<id_count; j++) {
 					p->storage[j] = (void *) malloc(resource_types_table[j].size);
-					if (resource_types_table[j].ctor) {//只初始化当前协程
+					if (resource_types_table[j].ctor && (force_thread_id == -1 || force_thread_id == i)) {//只初始化当前协程
 						resource_types_table[j].ctor(p->storage[j]);
 					}
 				}

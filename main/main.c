@@ -678,10 +678,10 @@ PHPAPI void php_module_initialized()
 {
 	module_initialized = 0;
 
-	// zend_module_entry *mob;
-	// ZEND_HASH_FOREACH_PTR(&module_registry, mob) {
-	// 	mob->module_started = 0;
-	// } ZEND_HASH_FOREACH_END();
+	zend_module_entry *mob;
+	ZEND_HASH_FOREACH_PTR(&module_registry, mob) {
+		mob->module_started = 0;
+	} ZEND_HASH_FOREACH_END();
 }
 /* }}} */
 
