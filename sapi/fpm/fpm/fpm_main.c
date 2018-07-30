@@ -1589,50 +1589,39 @@ static zend_module_entry cgi_module_entry = {
 //这里是执行代码的最终函数
 ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
 {
-    // zend_execute_data *execute_data;
+	sapi_coroutine_context* context = SG(coroutine_info).context;
+	context->ret = return_value;
+	context->op_array = op_array;
 
-    if (EG(exception) != NULL) {
-        return;
-    }
-    sapi_coroutine_context* context = SG(coroutine_info).context;
+	zend_execute_data *execute_data;
 
-    context->op_array = op_array;
+	if (EG(exception) != NULL) {
+		return;
+	}
 
-    //for coroutine
-    //导入context中的全局变量
-    zend_vm_stack_init();
-    
-    // context->execute_data = execute_data;
-    context->ret = return_value;
+	execute_data = zend_vm_stack_push_call_frame(ZEND_CALL_TOP_CODE | ZEND_CALL_HAS_SYMBOL_TABLE,
+		(zend_function*)op_array, 0, zend_get_called_scope(EG(current_execute_data)), zend_get_this_object(EG(current_execute_data)));
+	if (EG(current_execute_data)) {
+		execute_data->symbol_table = zend_rebuild_symbol_table();
+	} else {
+		execute_data->symbol_table = &EG(symbol_table);
+	}
 
-    context->execute_data = zend_vm_stack_push_call_frame(ZEND_CALL_TOP_CODE | ZEND_CALL_HAS_SYMBOL_TABLE,
-        (zend_function*)op_array, 0, zend_get_called_scope(EG(current_execute_data)), zend_get_this_object(EG(current_execute_data)));
-    // if (EG(current_execute_data)) {
-    //  context->execute_data->symbol_table = zend_rebuild_symbol_table();
-    // } else {
-    //  context->execute_data->symbol_table = &EG(symbol_table);
-    // }
+	// EX(prev_execute_data) = EG(current_execute_data);
+	// i_init_execute_data(execute_data, op_array, return_value);
+	zend_init_execute_data(execute_data, op_array, return_value);
 
-    zend_init_execute_data(context->execute_data, op_array, return_value);
+	context->execute_data = execute_data;
+	write_coroutine_context(context);
 
-    // EX(prev_execute_data) = EG(current_execute_data);
-    // i_init_execute_data(execute_data, op_array, return_value);
-
-    write_coroutine_context(context);
-    //for coroutine
-    //设置 锚点
-    int r = setjmp(*context->buf_ptr);
-
+	int r = setjmp(*context->buf_ptr);
     if(r == CORO_DEFAULT){//first run
-        EG(current_execute_data) = context->execute_data;
-        zend_execute_ex(EG(current_execute_data));
-        context->coro_state = CORO_END;
-    }else{
+		zend_execute_ex(execute_data);
+		zend_vm_stack_free_call_frame(execute_data);
+		context->coro_state = CORO_END;
+	}else{
         longjmp(*context->req_ptr,CORO_YIELD);
     }
-
-    // zend_execute_ex(context->execute_data);
-    
 }
 
 ZEND_API int zend_execute_scripts_coro(int type, zval *retval, int file_count, ...) /* {{{ */
@@ -1663,6 +1652,7 @@ ZEND_API int zend_execute_scripts_coro(int type, zval *retval, int file_count, .
             if (EG(exception)) {
                 zend_exception_error(EG(exception), E_ERROR);
             }
+
             destroy_op_array(op_array);
             efree_size(op_array, sizeof(zend_op_array));
         } else if (type==ZEND_REQUIRE) {

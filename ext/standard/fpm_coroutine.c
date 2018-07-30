@@ -123,18 +123,6 @@ void load_coroutine_context(sapi_coroutine_context *context){
     SG(sapi_headers) = context->sapi_headers;
 
 
-
-    // SG(sapi_started) = 1;
-
-
-    // SG(request_info) = context->request_info;
-
-    // EG(symbol_table) = *context->execute_data->symbol_table;
-
-    // EG(symbol_table) = context->symbol_table;
-
-    // zend_hash_copy(&EG(symbol_table),&context->symbol_table,NULL);
-
 }
 
 //将全局变量中的数据载入Context
@@ -166,27 +154,40 @@ void write_coroutine_context(sapi_coroutine_context *context){
 
 void resume_coroutine_context(sapi_coroutine_context* context){
 
-
+    
     set_force_thread_id(context->thread_id);
     tsrm_set_interpreter_context(get_tsrm_tls_entry(context->thread_id));
 
 
     int r = setjmp(*context->buf_ptr);//yield之后的代码段，设置起始标记
     if(r == CORO_DEFAULT){//继续
-
-        zend_vm_stack_free_args(context->prev_execute_data);
-        zend_vm_stack_free_call_frame(context->prev_execute_data);
+        SG(coroutine_info).test_log("=====1======\n");
+        // zend_vm_stack_free_args(context->prev_execute_data);
+        // zend_vm_stack_free_call_frame(context->prev_execute_data);
 
         load_coroutine_context(context);
+
         EG(current_execute_data)->opline++;
 
         zend_execute_ex(EG(current_execute_data));
+        // zend_vm_stack_free_call_frame(EG(current_execute_data));
         context->coro_state = CORO_END;
+        SG(coroutine_info).test_log("=======2====\n");
 
         zend_exception_restore();
         zend_try_exception_handler();
         if (EG(exception)) {
             zend_exception_error(EG(exception), E_ERROR);
+        }
+        destroy_op_array(context->op_array);
+        efree_size(context->op_array, sizeof(zend_op_array));
+        SG(coroutine_info).test_log("=====3======\n");
+
+        //from php_execute_script_coro ,处理异常
+        if (EG(exception)) {
+            zend_try {
+                zend_exception_error(EG(exception), E_ERROR);
+            } zend_end_try();
         }
 
 #if HAVE_BROKEN_GETCWD
@@ -198,12 +199,8 @@ void resume_coroutine_context(sapi_coroutine_context* context){
         SG(coroutine_info).free_old_cwd(context->old_cwd,context->use_heap);
 #endif
 
-        //from php_execute_script_coro ,处理异常
-        if (EG(exception)) {
-            zend_try {
-                zend_exception_error(EG(exception), E_ERROR);
-            } zend_end_try();
-        }
+        SG(coroutine_info).test_log("=====4======\n");
+        
 
         SG(coroutine_info).close_request();
         free_coroutine_context(SG(coroutine_info).context);
@@ -219,7 +216,7 @@ void yield_coroutine_context(){
     context->coro_state = CORO_YIELD;
 
     context->prev_execute_data = EG(current_execute_data)->prev_execute_data;
-    write_coroutine_context(SG(coroutine_info).context);
+    // write_coroutine_context(SG(coroutine_info).context);
 
     longjmp(*context->buf_ptr,CORO_YIELD);
 }
