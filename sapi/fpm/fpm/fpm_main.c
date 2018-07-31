@@ -1779,7 +1779,6 @@ PHPAPI int php_execute_script_coro(zend_file_handle *primary_file)
 
             retval = (zend_execute_scripts_coro(ZEND_REQUIRE, NULL, 3, prepend_file_p, primary_file, append_file_p) == SUCCESS);
         }
-        test_log("zend_execute_scripts_coro() run ok");
     } zend_end_try();
 
     if (EG(exception)) {
@@ -1856,6 +1855,7 @@ int close_request(){
 
 void do_accept(evutil_socket_t listener, short event, void *arg)  
 {  
+
     struct event_base *base = arg;  
     struct sockaddr_storage ss;  
     socklen_t slen = sizeof(ss);  
@@ -2011,8 +2011,8 @@ int main(int argc, char *argv[])
 #endif
 #endif
 
-int coroutine_count = 5;
-
+int coroutine_count = 1000;
+int coroutine_index = 0;
 
 #ifdef ZTS
 	tsrm_startup(coroutine_count, 1, 0, NULL);
@@ -2024,12 +2024,10 @@ int coroutine_count = 5;
     tsrm_set_interpreter_context(get_tsrm_tls_entry(0));
 #endif
 
-    int coroutine_index = 0;
     void* main_context = get_tsrm_tls_entry(0);
 
     init_coroutine_static();//初始化context池
 
-    //p ((sapi_globals_struct* )tsrm_tls_table[2]->storage[1])->coroutine_info
     //初始化全部协程
 COROUTINE_INIT_START
 	zend_signal_startup();

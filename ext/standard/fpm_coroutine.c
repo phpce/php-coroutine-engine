@@ -20,7 +20,9 @@
 sapi_coroutine_context* global_coroutine_context_pool = NULL;
 sapi_coroutine_context* global_coroutine_context_use = NULL;
 int context_count;
-
+struct event_base *base;
+struct event *listener_event;
+int listener_event_stop = 0;
 
 /**
  * 测试输出LOG
@@ -36,6 +38,21 @@ void test_log(char *text){
     result=fwrite(text,sizeof(char),lsize,pfile);//将pfile中内容读入pread指向内存中
     fclose(pfile);
 }
+
+void asser_event_stop(void){
+    if(!listener_event_stop && context_count<1){
+        listener_event_stop = 1;
+        event_del(listener_event);
+    }
+}
+
+void asser_event_continue(void){
+    if(listener_event_stop && context_count>0){
+        listener_event_stop = 0;
+        event_add(listener_event,NULL);
+    }
+}
+
 
 /**
  * 注册libevent
@@ -82,14 +99,12 @@ int regist_event(int fcgi_fd,void (*do_accept())){
 
 
 
-    struct event_base *base;
-    struct event *listener_event;
+    
     base = event_base_new();//初始化libevent
     if (!base)  
         return false; //libevent 初始化失败 
 
     listener_event = event_new(base, fcgi_fd, EV_READ|EV_PERSIST, do_accept, base);
-    // evutil_make_socket_nonblocking(fcgi_fd);
 
     /* 添加事件 */  
     event_add(listener_event, NULL);
@@ -210,6 +225,7 @@ void free_coroutine_context(sapi_coroutine_context* context){
     }
 
     context_count++;
+    asser_event_continue();
 }
 
 void init_coroutine_set_request(sapi_coroutine_context* context,fcgi_request *request){
@@ -244,12 +260,13 @@ sapi_coroutine_context* use_coroutine_context(){
 
         context_count--;
 
-
         set_force_thread_id(result->thread_id);
         tsrm_set_interpreter_context(get_tsrm_tls_entry(result->thread_id));
 
+        asser_event_stop();
         return result;
     }else{
+        asser_event_stop();
         return NULL;
     }
 }

@@ -81,10 +81,6 @@ void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
 
 int ReadHeaderDoneCallback(struct evhttp_request* remote_rsp, void* arg)
 {
-    char tempstr[200];
-    sprintf(tempstr,"< HTTP/1.1 %d %s\n", evhttp_request_get_response_code(remote_rsp), evhttp_request_get_response_code_line(remote_rsp));
-    SG(coroutine_info).test_log(tempstr);
-
     struct evkeyvalq* headers = evhttp_request_get_input_headers(remote_rsp);
     struct evkeyval* header;
     TAILQ_FOREACH(header, headers, next)
@@ -92,8 +88,6 @@ int ReadHeaderDoneCallback(struct evhttp_request* remote_rsp, void* arg)
         fprintf(stderr, "< %s: %s\n", header->key, header->value);
     }
     fprintf(stderr, "< \n");
-
-    SG(coroutine_info).test_log(tempstr);
     return 0;
 }
 
@@ -107,9 +101,6 @@ void ReadChunkCallback(struct evhttp_request* remote_rsp, void* arg)
         // fwrite(buf, n, 1, stdout);
         // SG(coroutine_info).test_log(buf);
     }
-
-    char tempstr[200];
-    SG(coroutine_info).test_log(tempstr);
 }
 
 void RemoteRequestErrorCallback(enum evhttp_request_error error, void* arg)
@@ -144,37 +135,26 @@ PHP_FUNCTION(coro_http_get)
 
     char tempstr[200];
 
-    sprintf(tempstr,"======= coro_http_get start =========!\n");
-    SG(coroutine_info).test_log(tempstr);
-
     // char* url = "http://live.ksmobile.net/base/apiend";
     char* url = "http://127.0.0.1:8080/";
     struct evhttp_uri* uri = evhttp_uri_parse(url);
     if (!uri)
     {
-        sprintf(tempstr,"parse url failed!\n");
-        SG(coroutine_info).test_log(tempstr);
-        RETURN_TRUE;
+        RETURN_FALSE;
     }
 
     struct event_base *base = SG(coroutine_info).base;
-    // struct event_base* base = event_base_new();
     if (!base)
     {
-        sprintf(tempstr,"create event base failed!\n");
-        SG(coroutine_info).test_log(tempstr);
-        RETURN_TRUE;
+        RETURN_FALSE;
     }
 
     struct evdns_base* dnsbase = evdns_base_new(base, 1);
     if (!dnsbase)
     {
-        sprintf(tempstr,"create dns base failed!\n");
-        SG(coroutine_info).test_log(tempstr);
+        RETURN_FALSE
     }
     assert(dnsbase);
-
-
 
     struct evhttp_request* request = evhttp_request_new(RemoteReadCallback, SG(coroutine_info).context);
     evhttp_request_set_header_cb(request, ReadHeaderDoneCallback);
@@ -184,9 +164,7 @@ PHP_FUNCTION(coro_http_get)
     const char* host = evhttp_uri_get_host(uri);
     if (!host)
     {
-        sprintf(tempstr,"parse host failed!\n");
-        SG(coroutine_info).test_log(tempstr);
-        RETURN_TRUE;
+        RETURN_FALSE;
     }
 
     int port = evhttp_uri_get_port(uri);
@@ -199,28 +177,15 @@ PHP_FUNCTION(coro_http_get)
         request_url = "/";
     }
 
-
-    sprintf(tempstr,"url:%s host:%s port:%d path:%s request_url:%s\n", url, host, port, path, request_url);
-    SG(coroutine_info).test_log(tempstr);
-
     struct evhttp_connection* connection =  evhttp_connection_base_new(base, dnsbase, host, port);
     if (!connection)
     {
-        sprintf(tempstr,"create evhttp connection failed!\n");
-        SG(coroutine_info).test_log(tempstr);
-        RETURN_TRUE;
+        RETURN_FALSE;
     }
 
     evhttp_connection_set_closecb(connection, RemoteConnectionCloseCallback, base);
-
     evhttp_add_header(evhttp_request_get_output_headers(request), "Host", host);
-
-    sprintf(tempstr,"======= coro_http_get evhttp_make_request =========!\n");
-    SG(coroutine_info).test_log(tempstr);
-
     evhttp_make_request(connection, request, EVHTTP_REQ_GET, request_url);
-
-    // event_base_dispatch(base);
 
     //yield 切出
     SG(coroutine_info).yield_coroutine_context();

@@ -1,5 +1,6 @@
 <?php
  echo "libevent 终于OK了，,ssss";
+ echo $_SERVER['coroutine_time'];
 // phpinfo();
 //sleep(5);
  // $a = 1;
