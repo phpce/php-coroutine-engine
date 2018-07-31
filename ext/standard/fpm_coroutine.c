@@ -126,7 +126,6 @@ void resume_coroutine_context(sapi_coroutine_context* context){
 
     int r = setjmp(*context->buf_ptr);//yield之后的代码段，设置起始标记
     if(r == CORO_DEFAULT){//继续
-        SG(coroutine_info).test_log("=====1======\n");
         // zend_vm_stack_free_args(context->prev_execute_data);
         // zend_vm_stack_free_call_frame(context->prev_execute_data);
 
@@ -137,7 +136,6 @@ void resume_coroutine_context(sapi_coroutine_context* context){
         zend_execute_ex(EG(current_execute_data));
         // zend_vm_stack_free_call_frame(EG(current_execute_data));
         context->coro_state = CORO_END;
-        SG(coroutine_info).test_log("=======2====\n");
 
         zend_exception_restore();
         zend_try_exception_handler();
@@ -146,7 +144,6 @@ void resume_coroutine_context(sapi_coroutine_context* context){
         }
         destroy_op_array(context->op_array);
         efree_size(context->op_array, sizeof(zend_op_array));
-        SG(coroutine_info).test_log("=====3======\n");
 
         //from php_execute_script_coro ,处理异常
         if (EG(exception)) {
@@ -163,10 +160,7 @@ void resume_coroutine_context(sapi_coroutine_context* context){
 #else
         SG(coroutine_info).free_old_cwd(context->old_cwd,context->use_heap);
 #endif
-
-        SG(coroutine_info).test_log("=====4======\n");
         
-
         SG(coroutine_info).close_request();
         free_coroutine_context(SG(coroutine_info).context);
 
@@ -270,7 +264,7 @@ void init_coroutine_context(void* tsrm_context,int idx){
     //初始化context 上下文
     sapi_coroutine_context *context = malloc(sizeof(sapi_coroutine_context));
     context->coro_state = CORO_DEFAULT;
-    context->func_cache = malloc(sizeof(zend_fcall_info_cache));
+    // context->func_cache = malloc(sizeof(zend_fcall_info_cache));
     context->request = NULL;
     context->buf_ptr = malloc(sizeof(jmp_buf));
     context->req_ptr = malloc(sizeof(jmp_buf));

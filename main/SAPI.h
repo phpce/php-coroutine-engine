@@ -125,15 +125,15 @@ typedef struct _sapi_coroutine_context{
     // zend_execute_data *execute_data;
     zend_op_array *op_array;
     zend_execute_data *prev_execute_data;//execute for execute before yield
-    zend_array symbol_table;
+    // zend_array symbol_table;
     struct _sapi_coroutine_context *next;
     struct _sapi_coroutine_context *prev;
     int coro_state;
-    zend_vm_stack vm_stack;
-    zval* vm_stack_top;
-    zval* vm_stack_end;
-    zend_fcall_info_cache* func_cache;
-    zval *ret;
+    // zend_vm_stack vm_stack;
+    // zval* vm_stack_top;
+    // zval* vm_stack_end;
+    // zend_fcall_info_cache* func_cache;
+    // zval *ret;
     //请求过程中用到的全局变量
 #if HAVE_BROKEN_GETCWD
     volatile int *old_cwd_fd;
@@ -142,7 +142,7 @@ typedef struct _sapi_coroutine_context{
     zend_bool use_heap;
 #endif
     fcgi_request *request;
-    sapi_headers_struct sapi_headers;//用于保存sapi headers
+    // sapi_headers_struct sapi_headers;//用于保存sapi headers
     sapi_request_info request_info;
     void* tsrm_context;
     int thread_id;

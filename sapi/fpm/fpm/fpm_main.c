@@ -1590,7 +1590,7 @@ static zend_module_entry cgi_module_entry = {
 ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
 {
 	sapi_coroutine_context* context = SG(coroutine_info).context;
-	context->ret = return_value;
+	// context->ret = return_value;
 	context->op_array = op_array;
 
 	zend_execute_data *execute_data;
