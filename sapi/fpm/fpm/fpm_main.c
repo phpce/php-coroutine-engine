@@ -2015,8 +2015,9 @@ int coroutine_index = 0;
 
 #ifdef ZTS
 	tsrm_startup(coroutine_count, 1, 0, NULL);
-    for(int j=0;j<coroutine_count;j++){
-        create_tsrm_tls_entry(j);
+	int _j;
+    for(_j=0;_j<coroutine_count;_j++){
+        create_tsrm_tls_entry(_j);
     }
     set_force_thread_id(0);
     // tsrm_ls = ts_resource(0);
