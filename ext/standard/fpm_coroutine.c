@@ -102,7 +102,7 @@ int regist_event(int fcgi_fd,void (*do_accept())){
     
     base = event_base_new();//初始化libevent
     if (!base)  
-        return false; //libevent 初始化失败 
+        return 0; //libevent 初始化失败 
 
     listener_event = event_new(base, fcgi_fd, EV_READ|EV_PERSIST, do_accept, base);
 
@@ -110,7 +110,7 @@ int regist_event(int fcgi_fd,void (*do_accept())){
     event_add(listener_event, NULL);
     event_base_dispatch(base);
 
-    return true;
+    return 1;
 }
 
 void checkout_coroutine_context(sapi_coroutine_context* context){
