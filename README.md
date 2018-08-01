@@ -37,27 +37,28 @@ PHP-FPM的设计模式主要是通过多进程来进行并发处理请求。对�
 
 目前只支持macOS和linux
 
-项目调试方法：
+项目调试方法一，编译安装:
+=====
 
 1.系统中先要安装libevent库，具体安装方法请自行查找资料
 
 2.项目根目录中执行
 
-sh buildconf --force
+ sh buildconf --force
 
 3.项目根目录中执行，安装php
 
-./configure --prefix=/usr/local/php7 --enable-fpm --enable-coro_http --enable-maintainer-zts && make && make install
+ ./configure --prefix=/usr/local/php7 --enable-fpm --enable-coro_http --enable-maintainer-zts && make && make install
 
 4.修改php-fpm配置文件，设置PHP-FPM进程数，线上环境根据CPU数量和需要的协程数量调整，测试的情况可以设置成1（php-fpm.d/www.conf）
 主要是这两个参数
-pm = static
 
-pm.max_children = 1
+ pm = static
+ pm.max_children = 1
 
 5.启动php-fpm
 
-sudo /usr/local/php7/sbin/php-fpm
+ sudo /usr/local/php7/sbin/php-fpm
 
 6.配置nginx，请自行查阅相关资料,请将nginx的访问目录配置成源码中的tutorial目录，主要是里面的test.php,用于测试
 
@@ -69,3 +70,14 @@ http://localhost/test.php?a=xx
 
 test.php中coro_http_get()方法是实现好的支持协程的扩展，功能是可以请求一个远程地址，返回值是远程地址的输出结果
 
+项目调试方法二，Docker安装:
+=====
+
+1.进入tutorial/，执行:
+
+ docker build -t php-fpm-coroutine ./
+
+2.运行docker:
+ docker run --privileged php-fpm-coroutine
+
+注意:这块还在调试兼容性，需要进入docker自行启动php，这块启动的时候有一个错误，但是可以正常运行

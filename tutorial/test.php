@@ -1,12 +1,11 @@
 <?php
  echo "libevent 终于OK了，,ssss";
- echo $_SERVER['coroutine_time'];
 
  echo "<br/>";
 // phpinfo();
 //sleep(5);
  // $a = 1;
- var_dump(coro_http_get("http://live.ksmobile.net/base/apiend"));
+ var_dump(coro_http_get("http://127.0.0.1:8080"));
  echo "<br/>";
  echo microtime();
  // echo "[".$a."]";

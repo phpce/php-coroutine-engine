@@ -16,6 +16,7 @@ RUN yum -y install wget
 RUN cd /data/soft/ && git clone https://github.com/sioomy/php-fpm-coroutine.git
 RUN cd /data/soft/ && git clone https://github.com/libevent/libevent.git
 RUN cd /data/soft/ && git clone git://git.gnome.org/libxml2
+RUN cd /data/soft/ && wget http://nginx.org/download/nginx-1.14.0.tar.gz
 RUN cd /data/soft/ && tar zxf nginx-1.14.0.tar.gz
 
 RUN cd /data/soft/libevent && sh autogen.sh && ./configure && make && make install
@@ -29,5 +30,5 @@ ADD ./php-fpm.conf /usr/local/php7/etc/
 ADD ./php.ini /usr/local/php7/lib/
 
 
-RUN /usr/local/php7/sbin/php-fpm
-RUN /usr/local/nginx/sbin/nginx
+RUN /usr/local/php7/sbin/php-fpm&
+CMD ["/usr/local/nginx/sbin/nginx"]
