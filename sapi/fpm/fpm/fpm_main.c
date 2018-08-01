@@ -1615,7 +1615,6 @@ ZEND_API void zend_execute_coro(zend_op_array *op_array, zval *return_value)
     if(r == CORO_DEFAULT){//first run
 		zend_execute_ex(execute_data);
 		zend_vm_stack_free_call_frame(execute_data);
-		context->coro_state = CORO_END;
 	}else{
         longjmp(*context->req_ptr,CORO_YIELD);
     }
@@ -2011,7 +2010,7 @@ int main(int argc, char *argv[])
 #endif
 #endif
 
-int coroutine_count = 1000;
+int coroutine_count = 512;
 int coroutine_index = 0;
 
 #ifdef ZTS
@@ -2042,7 +2041,7 @@ COROUTINE_INIT_START
     SG(coroutine_info).idx = coroutine_index;
     init_coroutine_info();
 
-    init_coroutine_context(get_tsrm_tls_entry(coroutine_index),coroutine_index);//初始化context
+    init_coroutine_context(coroutine_index);//初始化context
 COROUTINE_INIT_END
     
 

@@ -43,6 +43,7 @@
 #include "event2/thread.h"
 #include <event.h>
 
+#include "ext/standard/fpm_coroutine.h"
 
 #ifndef WIN32  
 #include <sys/socket.h>  
@@ -60,57 +61,75 @@ ZEND_DECLARE_MODULE_GLOBALS(coro_http)
 /* True global resources - no need for thread safety here */
 static int le_coro_http;
 
-/**
-    扩展需要用到的member
-    SG(coroutine_info).base;                            基础event_loop_base
-    SG(coroutine_info).context                          上下文
-    SG(coroutine_info).test_log(char* str);             输出LOG
-    SG(coroutine_info).yield_coroutine_context();       释放当前协程
-    SG(coroutine_info).resume_coroutine_context(context);   切换到协程
+/************************************************************************
+ *   扩展需要用到的member
+ *   SG(coroutine_info).base;                                   基础event_loop_base
+ *   SG(coroutine_info).context                                 上下文
+ *   SG(coroutine_info).test_log(char* str);                    输出LOG
+ *   SG(coroutine_info).yield_coroutine_context();              释放当前协程
+ *   SG(coroutine_info).checkout_coroutine_context(context);    切换到协程
+ *   SG(coroutine_info).resume_coroutine_context();             继续执行上下文
  */
 
-
-void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
-{
-
-    char tempstr[200];
-    sprintf(tempstr,"RemoteReadCallback\n");
-    SG(coroutine_info).test_log(tempstr);
-    SG(coroutine_info).resume_coroutine_context(arg);
-}
+char tmpStr[4096];
 
 int ReadHeaderDoneCallback(struct evhttp_request* remote_rsp, void* arg)
 {
-    struct evkeyvalq* headers = evhttp_request_get_input_headers(remote_rsp);
-    struct evkeyval* header;
-    TAILQ_FOREACH(header, headers, next)
-    {
-        fprintf(stderr, "< %s: %s\n", header->key, header->value);
-    }
-    fprintf(stderr, "< \n");
-    return 0;
+    strcpy(tmpStr,"");
 }
 
 void ReadChunkCallback(struct evhttp_request* remote_rsp, void* arg)
 {
-    char buf[4096];
+    char buf[1024];
     struct evbuffer* evbuf = evhttp_request_get_input_buffer(remote_rsp);
     int n = 0;
-    while ((n = evbuffer_remove(evbuf, buf, 4096)) > 0)
+    while ((n = evbuffer_remove(evbuf, buf, 1024)) > 0)
     {
-        // fwrite(buf, n, 1, stdout);
-        // SG(coroutine_info).test_log(buf);
+        strcat(tmpStr,buf);
     }
+}
+
+void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
+{
+    /**
+     * 当远程调用成功，立刻切换协程，arg是evhttp新建请求时传递过来的协程context
+     * 这里注意，一定要第一时间切换到当前请求的context
+     * 这样才能保证emalloc、SG宏、EG宏，等全局宏可以正确拿到当前协程的内存
+     */
+    SG(coroutine_info).checkout_coroutine_context(arg);
+    sapi_coroutine_context* context = arg;
+
+    /**
+     * return_value 是扩展函数执行时保存下来的返回值指针
+     */
+    zval* return_value = context->return_value;
+    
+    /**
+     * 从全局变量中获取返回结果的buffer,并创建zend_string类型的结果
+     */
+    zend_string* result = zend_string_init(tmpStr,strlen(tmpStr)*sizeof(char),0);
+
+    /**
+     * 设置函数返回值
+     */
+    RETVAL_STR(result);
+
+    /**
+     * 继续执行当前协程的PHP脚本
+     */
+    SG(coroutine_info).resume_coroutine_context();
 }
 
 void RemoteRequestErrorCallback(enum evhttp_request_error error, void* arg)
 {
-    // event_base_loopexit((struct event_base*)arg, NULL);
+    SG(coroutine_info).checkout_coroutine_context(arg);
+    SG(coroutine_info).resume_coroutine_context();
 }
 
 void RemoteConnectionCloseCallback(struct evhttp_connection* connection, void* arg)
 {
-    // event_base_loopexit((struct event_base*)arg, NULL);
+    SG(coroutine_info).checkout_coroutine_context(arg);
+    SG(coroutine_info).resume_coroutine_context();
 }
 
 /* {{{ PHP_INI
@@ -132,17 +151,27 @@ PHP_INI_END()
    Return a string to confirm that the module is compiled in */
 PHP_FUNCTION(coro_http_get)
 {
+    /**
+     * 保存coro_http_get返回值指针到协程中，当evhttp返回时会用到
+     */
+    SG(coroutine_info).context->return_value = return_value; 
 
-    char tempstr[200];
+    zval* param;
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &param) == FAILURE){
+        RETURN_FALSE;
+    }
+    char* url = ZSTR_VAL(zval_get_string(param));
 
-    // char* url = "http://live.ksmobile.net/base/apiend";
-    char* url = "http://127.0.0.1:8080/";
     struct evhttp_uri* uri = evhttp_uri_parse(url);
+
     if (!uri)
     {
         RETURN_FALSE;
     }
 
+    /**
+     * 这里与正常使用evhttp不同的是，要使用协程里的event_base，并且后面不需要调用loop方法（使用系统的loop）
+     */
     struct event_base *base = SG(coroutine_info).base;
     if (!base)
     {
@@ -152,7 +181,7 @@ PHP_FUNCTION(coro_http_get)
     struct evdns_base* dnsbase = evdns_base_new(base, 1);
     if (!dnsbase)
     {
-        RETURN_FALSE
+        RETURN_FALSE;
     }
     assert(dnsbase);
 
@@ -187,10 +216,10 @@ PHP_FUNCTION(coro_http_get)
     evhttp_add_header(evhttp_request_get_output_headers(request), "Host", host);
     evhttp_make_request(connection, request, EVHTTP_REQ_GET, request_url);
 
-    //yield 切出
+    /**
+     * 请求发出后，立刻释放当前协程，将控制权交给协程控制器(php-fpm)
+     */
     SG(coroutine_info).yield_coroutine_context();
-
-    RETURN_TRUE;
 }
 /* }}} */
 /* The previous line is meant for vim and emacs, so it can correctly fold and
