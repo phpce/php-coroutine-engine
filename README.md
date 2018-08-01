@@ -78,6 +78,7 @@ test.php中coro_http_get()方法是实现好的支持协程的扩展，功能是
  docker build -t php-fpm-coroutine ./
 
 2.运行docker:
+
  docker run --privileged php-fpm-coroutine
 
 注意:这块还在调试兼容性，需要进入docker自行启动php，这块启动的时候有一个错误，但是可以正常运行
