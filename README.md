@@ -25,15 +25,16 @@ PHP-FPM的设计模式主要是通过多进程来进行并发处理请求。对�
 
 进度说明
 ===================
-本项目已经基本通过PHP-FPM实现了协程。为了便于测试，只开通了5个协程。
-项目还处于未完成阶段，待处理任务：
-1.协程使用限制
-默认程序启动会声明一个协程池，为方便调试，设置成了5个。超出会报错。所以暂时不支持压测。这个需要回头有时间优化
+这个项目基本上完成，接下来要做的事情是压力测试，和功能测试
 
+项目中，每个进程会开启512个协程，如果想增大并发，可以通过增加进程数来提升总的协程数量。每台机器总协程数=进程数X512
 
 项目调试说明
 ===================
 /ext/coro_http 目录是为了测试协程开发的PHP扩展。
+里面已包含详尽的注释。
+这个扩展可以当成一个协程实现的demo,里面内容非常简单，开发者可以参照demo开发更多支持协程的扩展，不需要关心PHP-FPM中实现的携程控制器部分
+
 目前只支持macOS和linux
 
 项目调试方法：
@@ -46,78 +47,19 @@ sh buildconf --force
 
 3.项目根目录中执行，安装php
 
-./configure --prefix=/usr/local/php7 --enable-fpm --enable-maintainer-zts && make && make install
+./configure --prefix=/usr/local/php7 --enable-fpm --enable-coro_http --enable-maintainer-zts && make && make install
 
-4.安装协程扩展coro_http,进入ext/coro_http
-执行刚刚安装好的php对应的phpize
-
-/usr/local/php7/bin/phpize
-
-./configure --with-php-config=/usr/local/php7/bin/php-config --enable-coro_http && make &&sudo  make install
-
-5.修改php-fpm配置文件，将进程数设置成1（php-fpm.d/www.conf）
-主要是这两个参数
-
-pm = static
-
-pm.max_children = 1
-
-6.修改PHP配置文件，增加coro_http扩展(具体位置具体修改)
-
-extension=/Users/sioomy/work/php-src/ext/coro_http/modules/coro_http.so
-
-7.启动php-fpm
+4.启动php-fpm
 
 sudo /usr/local/php7/sbin/php-fpm
 
-8.配置nginx，请自行查阅相关资料,请将nginx的访问目录配置成源码中的tutorial目录，主要是里面的test.php,用于测试
+5.配置nginx，请自行查阅相关资料,请将nginx的访问目录配置成源码中的tutorial目录，主要是里面的test.php,用于测试
 
-9.安装nodejs并启动test.js 
 
-node tutorial/test.js
-
-10.这里就可以开始测试了，根据配置好的NGINX，直接访问浏览器
+6.这里就可以开始测试了，根据配置好的NGINX，直接访问浏览器(在mac里特别说明)
 http://localhost/test.php?a=xx
-注意，这里一定要注意，可以开两个窗口访问，但是后面的参数要不一样。因为NGINX对同一个请求，如果相同的参数，NGINX会排队，这里NGINX可能也需要处理一下。不过可以忽略
+注意：这里一定要注意，可以开两个窗口访问，但是后面的参数要不一样。因为NGINX对同一个请求，如果相同的参数，NGINX会排队，这里NGINX可能也需要处理一下。不过可以忽略
 到这里，就可以看到协程的效果了，结果是，两个窗口同时访问，会先后回来。coro_http会请求nodejs的服务，5秒返回。这里大致可以看到同一个进程的情况下，访问时无阻塞的。
 
-
-The PHP Interpreter
-===================
-This is the github mirror of the official PHP repository located at
-http://git.php.net.
-
-[![Build Status](https://secure.travis-ci.org/php/php-src.svg?branch=master)](http://travis-ci.org/php/php-src)
-[![Build status](https://ci.appveyor.com/api/projects/status/meyur6fviaxgdwdy?svg=true)](https://ci.appveyor.com/project/php/php-src)
-
-Pull Requests
-=============
-PHP accepts pull requests via github. Discussions are done on github, but
-depending on the topic can also be relayed to the official PHP developer
-mailing list internals@lists.php.net.
-
-New features require an RFC and must be accepted by the developers.
-See https://wiki.php.net/rfc and https://wiki.php.net/rfc/voting for more
-information on the process.
-
-Bug fixes **do not** require an RFC, but require a bugtracker ticket. Always
-open a ticket at https://bugs.php.net and reference the bug id using #NNNNNN.
-
-    Fix #55371: get_magic_quotes_gpc() throws deprecation warning
-
-    After removing magic quotes, the get_magic_quotes_gpc function caused
-    a deprecate warning. get_magic_quotes_gpc can be used to detected
-    the magic_quotes behavior and therefore should not raise a warning at any
-    time. The patch removes this warning
-
-We do not merge pull requests directly on github. All PRs will be
-pulled and pushed through http://git.php.net.
-
-
-Guidelines for contributors
-===========================
-- [CODING_STANDARDS](/CODING_STANDARDS)
-- [README.GIT-RULES](/README.GIT-RULES)
-- [README.MAILINGLIST_RULES](/README.MAILINGLIST_RULES)
-- [README.RELEASE_PROCESS](/README.RELEASE_PROCESS)
+test.php中coro_http_get()方法是实现好的支持协程的扩展，功能是可以请求一个远程地址，返回值是远程地址的输出结果
 
