@@ -49,14 +49,20 @@ sh buildconf --force
 
 ./configure --prefix=/usr/local/php7 --enable-fpm --enable-coro_http --enable-maintainer-zts && make && make install
 
-4.启动php-fpm
+4.修改php-fpm配置文件，设置PHP-FPM进程数，线上环境根据CPU数量和需要的协程数量调整，测试的情况可以设置成1（php-fpm.d/www.conf）
+主要是这两个参数
+pm = static
+
+pm.max_children = 1
+
+5.启动php-fpm
 
 sudo /usr/local/php7/sbin/php-fpm
 
-5.配置nginx，请自行查阅相关资料,请将nginx的访问目录配置成源码中的tutorial目录，主要是里面的test.php,用于测试
+6.配置nginx，请自行查阅相关资料,请将nginx的访问目录配置成源码中的tutorial目录，主要是里面的test.php,用于测试
 
 
-6.这里就可以开始测试了，根据配置好的NGINX，直接访问浏览器(在mac里特别说明)
+7.这里就可以开始测试了，根据配置好的NGINX，直接访问浏览器(在mac里特别说明)
 http://localhost/test.php?a=xx
 注意：这里一定要注意，可以开两个窗口访问，但是后面的参数要不一样。因为NGINX对同一个请求，如果相同的参数，NGINX会排队，这里NGINX可能也需要处理一下。不过可以忽略
 到这里，就可以看到协程的效果了，结果是，两个窗口同时访问，会先后回来。coro_http会请求nodejs的服务，5秒返回。这里大致可以看到同一个进程的情况下，访问时无阻塞的。
