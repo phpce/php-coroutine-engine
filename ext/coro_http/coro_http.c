@@ -61,6 +61,17 @@ ZEND_DECLARE_MODULE_GLOBALS(coro_http)
 /* True global resources - no need for thread safety here */
 static int le_coro_http;
 
+typedef struct _coro_http_param
+{
+    struct evdns_base* dnsbase;
+    struct evhttp_request* request;
+    struct evhttp_connection* connection;
+    struct evhttp_uri* uri;
+    sapi_coroutine_context* context;
+} coro_http_param;
+
+
+
 /************************************************************************
  *   扩展需要用到的member
  *   SG(coroutine_info).base;                                   基础event_loop_base
@@ -72,9 +83,18 @@ static int le_coro_http;
  *   SG(coroutine_info).resume_coroutine_context();             继续执行上下文
  */
 
+void free_request(coro_http_param* http_param){
+    evhttp_connection_free(http_param->connection);
+    evhttp_uri_free(http_param->uri);
+    // evhttp_request_free(http_param->request);
+    evdns_base_free(http_param->dnsbase,0);
+    free(http_param);
+}
+
 int ReadHeaderDoneCallback(struct evhttp_request* remote_rsp, void* arg)
 {
-    SG(coroutine_info).checkout_coroutine_context(arg);
+    sapi_coroutine_context* context = ((coro_http_param*)arg)->context;
+    SG(coroutine_info).checkout_coroutine_context(context);
     char* tmpStr = (char*)emalloc(sizeof(char)*4096);
     strcpy(tmpStr,"");
 
@@ -82,14 +102,15 @@ int ReadHeaderDoneCallback(struct evhttp_request* remote_rsp, void* arg)
      * 注意，tmpStr是不能放在全局里的，因为多个协程操作会导致不安全
      * 因此，tmpStr放在上下文里比较好
      */
-    ((sapi_coroutine_context*)arg)->tmpData = (void*)tmpStr;
+    context->tmpData = (void*)tmpStr;
 }
 
 void ReadChunkCallback(struct evhttp_request* remote_rsp, void* arg)
 {
-    SG(coroutine_info).checkout_coroutine_context(arg);
+    sapi_coroutine_context* context = ((coro_http_param*)arg)->context;
+    SG(coroutine_info).checkout_coroutine_context(context);
 
-    char* tmpStr = (char*)((sapi_coroutine_context*)arg)->tmpData;
+    char* tmpStr = (char*)context->tmpData;
     char buf[1024];
     struct evbuffer* evbuf = evhttp_request_get_input_buffer(remote_rsp);
     int n = 0;
@@ -106,10 +127,10 @@ void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
      * 这里注意，一定要第一时间切换到当前请求的context
      * 这样才能保证emalloc、SG宏、EG宏，等全局宏可以正确拿到当前协程的内存
      */
-    SG(coroutine_info).checkout_coroutine_context(arg);
-    sapi_coroutine_context* context = arg;
+    sapi_coroutine_context* context = ((coro_http_param*)arg)->context;
+    SG(coroutine_info).checkout_coroutine_context(context);
 
-    char* tmpStr = (char*)((sapi_coroutine_context*)arg)->tmpData;
+    char* tmpStr = (char*)context->tmpData;
 
     /**
      * return_value 是扩展函数执行时保存下来的返回值指针
@@ -128,7 +149,8 @@ void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
 
 
     efree(tmpStr);
-    ((sapi_coroutine_context*)arg)->tmpData = NULL;
+    context->tmpData = NULL;
+    free_request(arg);
 
     /**
      * 继续执行当前协程的PHP脚本
@@ -138,7 +160,9 @@ void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
 
 void RemoteRequestErrorCallback(enum evhttp_request_error error, void* arg)
 {
-    SG(coroutine_info).checkout_coroutine_context(arg);
+    sapi_coroutine_context* context = ((coro_http_param*)arg)->context;
+    SG(coroutine_info).checkout_coroutine_context(context);
+    free_request(arg);
     SG(coroutine_info).resume_coroutine_context();
 }
 
@@ -176,8 +200,10 @@ PHP_FUNCTION(coro_http_get)
         RETURN_FALSE;
     }
     char* url = ZSTR_VAL(zval_get_string(param));
-
+    coro_http_param* coro_param = malloc(sizeof(coro_http_param));
     struct evhttp_uri* uri = evhttp_uri_parse(url);
+    coro_param->context = SG(coroutine_info).context;
+    coro_param->uri = uri;
 
     if (!uri)
     {
@@ -199,12 +225,17 @@ PHP_FUNCTION(coro_http_get)
         RETURN_FALSE;
     }
     assert(dnsbase);
+    
+    coro_param->dnsbase = dnsbase;
+    
 
-    struct evhttp_request* request = evhttp_request_new(RemoteReadCallback, SG(coroutine_info).context);
+
+    struct evhttp_request* request = evhttp_request_new(RemoteReadCallback, coro_param);
     evhttp_request_set_header_cb(request, ReadHeaderDoneCallback);
     evhttp_request_set_chunked_cb(request, ReadChunkCallback);
     evhttp_request_set_error_cb(request, RemoteRequestErrorCallback);
-
+    coro_param->request = request;
+    
     const char* host = evhttp_uri_get_host(uri);
     if (!host)
     {
@@ -226,7 +257,7 @@ PHP_FUNCTION(coro_http_get)
     {
         RETURN_FALSE;
     }
-
+    coro_param->connection = connection;
     evhttp_connection_set_closecb(connection, RemoteConnectionCloseCallback, base);
     evhttp_add_header(evhttp_request_get_output_headers(request), "Host", host);
     evhttp_make_request(connection, request, EVHTTP_REQ_GET, request_url);

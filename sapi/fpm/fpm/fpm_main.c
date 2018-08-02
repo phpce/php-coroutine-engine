@@ -2010,7 +2010,7 @@ int main(int argc, char *argv[])
 #endif
 #endif
 
-int coroutine_count = 512;
+int coroutine_count = 128;
 int coroutine_index = 0;
 
 #ifdef ZTS
