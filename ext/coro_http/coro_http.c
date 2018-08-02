@@ -65,27 +65,37 @@ static int le_coro_http;
  *   扩展需要用到的member
  *   SG(coroutine_info).base;                                   基础event_loop_base
  *   SG(coroutine_info).context                                 上下文
+ *   SG(coroutine_info).tmpData                                 是一个void* 类型的空指针，用于临时存放数据
  *   SG(coroutine_info).test_log(char* str);                    输出LOG
  *   SG(coroutine_info).yield_coroutine_context();              释放当前协程
  *   SG(coroutine_info).checkout_coroutine_context(context);    切换到协程
  *   SG(coroutine_info).resume_coroutine_context();             继续执行上下文
  */
 
-char tmpStr[4096];
-
 int ReadHeaderDoneCallback(struct evhttp_request* remote_rsp, void* arg)
 {
+    SG(coroutine_info).checkout_coroutine_context(arg);
+    char* tmpStr = (char*)emalloc(sizeof(char)*4096);
     strcpy(tmpStr,"");
+
+    /**
+     * 注意，tmpStr是不能放在全局里的，因为多个协程操作会导致不安全
+     * 因此，tmpStr放在上下文里比较好
+     */
+    ((sapi_coroutine_context*)arg)->tmpData = (void*)tmpStr;
 }
 
 void ReadChunkCallback(struct evhttp_request* remote_rsp, void* arg)
 {
+    SG(coroutine_info).checkout_coroutine_context(arg);
+
+    char* tmpStr = (char*)((sapi_coroutine_context*)arg)->tmpData;
     char buf[1024];
     struct evbuffer* evbuf = evhttp_request_get_input_buffer(remote_rsp);
     int n = 0;
     while ((n = evbuffer_remove(evbuf, buf, 1024)) > 0)
     {
-        strcat(tmpStr,buf);
+        strncat(tmpStr,buf,n);
     }
 }
 
@@ -98,6 +108,8 @@ void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
      */
     SG(coroutine_info).checkout_coroutine_context(arg);
     sapi_coroutine_context* context = arg;
+
+    char* tmpStr = (char*)((sapi_coroutine_context*)arg)->tmpData;
 
     /**
      * return_value 是扩展函数执行时保存下来的返回值指针
@@ -114,6 +126,10 @@ void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
      */
     RETVAL_STR(result);
 
+
+    efree(tmpStr);
+    ((sapi_coroutine_context*)arg)->tmpData = NULL;
+
     /**
      * 继续执行当前协程的PHP脚本
      */
@@ -128,8 +144,7 @@ void RemoteRequestErrorCallback(enum evhttp_request_error error, void* arg)
 
 void RemoteConnectionCloseCallback(struct evhttp_connection* connection, void* arg)
 {
-    SG(coroutine_info).checkout_coroutine_context(arg);
-    SG(coroutine_info).resume_coroutine_context();
+
 }
 
 /* {{{ PHP_INI

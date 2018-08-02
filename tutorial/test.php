@@ -1,5 +1,5 @@
 <?php
- echo "libevent 终于OK了，,ssss";
+ echo "OK了，,ssss";
 
  echo "<br/>";
 // phpinfo();

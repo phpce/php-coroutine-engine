@@ -143,6 +143,7 @@ typedef struct _sapi_coroutine_context{
     sapi_request_info request_info;
     int thread_id;
     zval* return_value;
+    void* tmpData;//use to store data
 
 } sapi_coroutine_context;
 
