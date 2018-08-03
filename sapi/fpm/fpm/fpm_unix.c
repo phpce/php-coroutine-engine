@@ -537,7 +537,7 @@ int fpm_unix_init_main() /* {{{ */
 					} else {
 						if (readval == 1) {
 							zlog(ZLOG_DEBUG, "I received a valid acknoledge from the master process, I can exit without error");
-							fpm_cleanups_run(FPM_CLEANUP_PARENT_EXIT);
+							// fpm_cleanups_run(FPM_CLEANUP_PARENT_EXIT);//exit 没必要clean up
 							exit(FPM_EXIT_OK);
 						} else {
 							zlog(ZLOG_DEBUG, "The master process returned an error !");
