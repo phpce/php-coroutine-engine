@@ -1,18 +1,3 @@
-- [项目说明(中文)(#项目说明[中文])
- - [协程原理](#协程原理)
- - [压测报告](#压测报告)
- - [注意事项](#注意事项)
- - [扩展说明](#扩展说明)
- - [项目调试方法一，编译安装:](#项目调试方法一，编译安装:)
- - [项目调试方法二，Docker安装(推荐)](#项目调试方法二，Docker安装[推荐]:)
-- [Project description (For English)](#Project-description[For-English])
- - [Coroutine theory](#Coroutine-theory)
- - [Pressure test report](#Pressure-test-report)
- - [Matters of attention](#Matters-of-attention)
- - [Extension explanation](#Extension-explanation)
- - [Debug method 1, compile and install:](#Debug-method-1,-compile-and-install:)
- - [Debug method two, Docker installation (recommended):](#Debug-method-two,-Docker-installation[recommended]:)
-
 # 项目说明[中文]
 
 本项目是php-fpm的分支，已经实现php原生协程。
