@@ -207,7 +207,8 @@ PHP_FUNCTION(coro_http_get)
 
     if (!uri)
     {
-        RETURN_FALSE;
+        zend_string* result = zend_string_init("uri create error!",strlen("uri create error!")*sizeof(char),0);
+        RETURN_STR(result);
     }
 
     /**
@@ -216,13 +217,15 @@ PHP_FUNCTION(coro_http_get)
     struct event_base *base = SG(coroutine_info).base;
     if (!base)
     {
-        RETURN_FALSE;
+        zend_string* result = zend_string_init("event_base error!",strlen("event_base error!")*sizeof(char),0);
+        RETURN_STR(result);
     }
 
     struct evdns_base* dnsbase = evdns_base_new(base, 1);
     if (!dnsbase)
     {
-        RETURN_FALSE;
+        zend_string* result = zend_string_init("dnsbase error!",strlen("dnsbase error!")*sizeof(char),0);
+        RETURN_STR(result);
     }
     assert(dnsbase);
     
@@ -239,7 +242,8 @@ PHP_FUNCTION(coro_http_get)
     const char* host = evhttp_uri_get_host(uri);
     if (!host)
     {
-        RETURN_FALSE;
+        zend_string* result = zend_string_init("host error!",strlen("host error!")*sizeof(char),0);
+        RETURN_STR(result);
     }
 
     int port = evhttp_uri_get_port(uri);
@@ -255,7 +259,8 @@ PHP_FUNCTION(coro_http_get)
     struct evhttp_connection* connection =  evhttp_connection_base_new(base, dnsbase, host, port);
     if (!connection)
     {
-        RETURN_FALSE;
+        zend_string* result = zend_string_init("create connection error!",strlen("create connection error!")*sizeof(char),0);
+        RETURN_STR(result);
     }
     coro_param->connection = connection;
     evhttp_connection_set_closecb(connection, RemoteConnectionCloseCallback, base);
