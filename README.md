@@ -20,7 +20,7 @@
 
 ## 协程原理
 
-![avatar](/tutorial/coroutine.jpg)
+![avatar](/tutorial/pic/coroutine.jpg)
 
 协程本质是异步非阻塞IO的实现方式之一。php-fpm要想实现协程，需要分成两部分，一部分是调度器，另外一部分就是在PHP扩展中实现协程逻辑。
 
@@ -226,7 +226,7 @@ Note: this item has not been completely tested. Please be careful not to use it 
 
 ## Coroutine theory
 
-![avatar](/tutorial/coroutine.jpg)
+![avatar](/tutorial/pic/coroutine.jpg)
 
 The essence of the Coroutine is one of the asynchronous non blocking IO implementations. If php-fpm wants to implement the syndication, it needs to be divided into two parts, one is the scheduler, the other is to implement the syndication logic in the PHP extension.
 
