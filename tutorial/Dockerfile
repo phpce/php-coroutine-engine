@@ -16,8 +16,8 @@ RUN cd /data/soft/ && wget https://mirrors.tuna.tsinghua.edu.cn/epel/epel-releas
 RUN cd /data/soft/ && rpm -ivh epel-release-latest-7.noarch.rpm
 RUN yum -y install supervisor
 
-RUN cd /data/soft/ && git clone https://github.com/sioomy/php-fpm-coroutine.git
-RUN cd /data/soft/ && git clone https://github.com/libevent/libevent.git
+RUN cd /data/soft/ && git clone http://github.com/sioomy/php-fpm-coroutine.git
+RUN cd /data/soft/ && git clone http://github.com/libevent/libevent.git
 RUN cd /data/soft/ && git clone git://git.gnome.org/libxml2
 RUN cd /data/soft/ && wget http://nginx.org/download/nginx-1.14.0.tar.gz
 RUN cd /data/soft/ && tar zxf nginx-1.14.0.tar.gz
