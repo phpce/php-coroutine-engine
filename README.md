@@ -411,7 +411,7 @@ It is important to note that in chrome, two windows can be accessed, but the fol
 1. enter tutorial/, execute:
 
 ```
-Docker build -t php-fpm-coroutine. /
+Docker build -t php-fpm-coroutine ./
 ```
 
 2. run docker:
