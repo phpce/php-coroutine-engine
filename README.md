@@ -173,7 +173,7 @@ ext/coro_http 目录是为了测试协程开发的PHP扩展，提供了coro_http
 这里一定要注意，在chrome中可以开两个窗口访问，但是后面的参数要不一样。  
 
 
-项目调试方法二，Docker安装:
+项目调试方法二，Docker安装(推荐):
 =====
 
 1.进入tutorial/，执行:
@@ -182,6 +182,20 @@ ext/coro_http 目录是为了测试协程开发的PHP扩展，提供了coro_http
 ```
 2.运行docker:
 ```
- docker run --privileged php-fpm-coroutine
+ docker run -p 8083:80 php-fpm-coroutine
 ```
-注意:这块还在调试兼容性，需要进入docker自行启动php，这块启动的时候有一个错误，但是可以正常运行
+3.浏览器输入网址
+```
+ http://localhost:8083/test3.php
+```
+可以看到输出结果为：
+```
+"\n\n \n \n <\/head>\n \n <\/body>\n<\/html>\n"
+```
+test3.php代码：
+```
+echo json_encode(coro_http_get("https://eclick.baidu.com/fp.htm?br=2&fp=AFC7630BB
+EFD3392102B5F3F1EEF0C4CF&fp2=94C2E84A9CD47B1BC80A6366448EEB23&ci=033B5A846E552C44
+95EF85060AF903D17%3AFG%3D1&bi=3997FDA588664E4479DBBB8813432125%3AFG%3D1&im=0&wf==
+0&ct=2194&bp=&m=&t=0&ft=&_=1533274737087"));
+```

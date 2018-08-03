@@ -30,5 +30,5 @@ ADD ./php-fpm.conf /usr/local/php7/etc/
 ADD ./php.ini /usr/local/php7/lib/
 
 
-RUN /usr/local/php7/sbin/php-fpm&
+RUN /usr/local/php7/sbin/php-fpm
 CMD ["/usr/local/nginx/sbin/nginx"]

@@ -1,3 +1,6 @@
 <?php
-echo coro_http_get("http://api.k780.com:88/?app=weather.history&weaid=1&date=2015-07-20&appkey=10003&sign=b59bc3ef6191eb9f747dd4e83c99f2a4&format=json"));
+echo json_encode(coro_http_get("https://eclick.baidu.com/fp.htm?br=2&fp=AFC7630BB
+EFD3392102B5F3F1EEF0C4CF&fp2=94C2E84A9CD47B1BC80A6366448EEB23&ci=033B5A846E552C44
+95EF85060AF903D17%3AFG%3D1&bi=3997FDA588664E4479DBBB8813432125%3AFG%3D1&im=0&wf==
+0&ct=2194&bp=&m=&t=0&ft=&_=1533274737087"));
 ?>
