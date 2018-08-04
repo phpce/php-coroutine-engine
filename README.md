@@ -20,6 +20,8 @@
 
 作者 email :sioomy@qq.com ,如有问题，请联系我。
 
+最后，这个项目完成过程挺不容易的，要感谢一下这个项目开发过程中给予支持的各位老大和同事，尤其是WorkerMan的作者worker,滴滴开源的大牛陈雷，swoole的核心开发者桶哥，以及我的直属领导宏杰的支持。接下来还要在实际应用中测试，以及开发更多支持协程的扩展。也希望更多的开发着加入进来，给予支持和指导。
+
 
 ## 协程原理
 
@@ -225,6 +227,8 @@ This project is through the transformation of the php-fpm source code, the imple
 Note: this item has not been completely tested. Please be careful not to use it in the production environment.
 
 Author email :sioomy@qq.com ,if you have question ,send message to me.
+
+Finally, it's not easy to finish the project. Thank you for the support of the project and colleagues, especially the WorkerMan author worker, Chen Lei from didi, tongge who is the core developer of swoole, and my direct leader, hongjie. Next, we need to test in real applications and develop more extensions that support coroutine. I also hope that more developers will join in and give support and guidance.
 
 ## Coroutine theory
 
