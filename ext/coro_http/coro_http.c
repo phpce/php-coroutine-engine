@@ -162,6 +162,9 @@ void RemoteRequestErrorCallback(enum evhttp_request_error error, void* arg)
 {
     sapi_coroutine_context* context = ((coro_http_param*)arg)->context;
     SG(coroutine_info).checkout_coroutine_context(context);
+
+    zend_string* result = zend_string_init("remote request error!",strlen("remote request error!")*sizeof(char),0);
+    RETVAL_STR(result);
     free_request(arg);
     SG(coroutine_info).resume_coroutine_context();
 }
@@ -197,7 +200,8 @@ PHP_FUNCTION(coro_http_get)
 
     zval* param;
     if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &param) == FAILURE){
-        RETURN_FALSE;
+        zend_string* result = zend_string_init("param error!",strlen("param error!")*sizeof(char),0);
+        RETURN_STR(result);
     }
     char* url = ZSTR_VAL(zval_get_string(param));
     coro_http_param* coro_param = malloc(sizeof(coro_http_param));
