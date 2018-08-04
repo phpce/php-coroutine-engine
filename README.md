@@ -158,7 +158,7 @@ ext/coro_http 目录是为了测试协程开发的PHP扩展，提供了coro_http
 ```
 3.安装php
 ```
- ./configure --prefix=/usr/local/php7 --enable-fpm --enable-coro_http --enable-maintainer-zts && make && make install
+ ./configure --prefix=/usr/local/php7 --enable-fpm --enable-coro_http --enable-maintainer-zts && make && sudo make install
 ```
 注意：linux 中需要增加--with-openssl ，不然安装会出错，mac不需要。  
 
@@ -291,7 +291,7 @@ Test.php location: tutorial/test.php
 Test.php calls test.js through coro_http_get (HTTP client to implement the Association).
 
 ```
-Var_dump (coro_http_get ("http://localhost:8080/"));
+var_dump (coro_http_get ("http://localhost:8080/"));
 ```
 In this test, php-fpm started 8 processes, and the maximum memory usage per process in PHP-FPM is 128M.
 
@@ -343,14 +343,14 @@ Finally, because the machine presses the machine, there are more services. If se
 2. when starting, pay attention to adjusting the number of PHP-FPM processes, php-fpm.d/www.conf
 
 ```
-PM = static  
-Pm.max_children = 4
+pm = static  
+pm.max_children = 4
 ```
 
 3. note that adjust the memory size used by each process. In php.ini. Please calculate reasonably according to the number of processes and the available memory of the system.
 
 ```
-Memory_limit = 128M
+memory_limit = 128M
 ```
 
 4. when testing, please note that some browsers are blocking the same link, but changing the parameters will not block, such as chrome (this comparison pit, at first I think it's a long time to think it's nginx's problem). It is recommended that the curl command test be used to better observe the synergy effect.
@@ -379,7 +379,7 @@ sh buildconf --force
 3. install PHP
 
 ```
-./configure --prefix=/usr/local/php7 --enable-fpm --enable-coro_http --enable-maintainer-zts & make & make install
+./configure --prefix=/usr/local/php7 --enable-fpm --enable-coro_http --enable-maintainer-zts && make && sudo make install
 ```
 
 Note: --with-openssl is needed in Linux, otherwise installation will be wrong and Mac will not be needed.
@@ -389,14 +389,14 @@ Note: --with-openssl is needed in Linux, otherwise installation will be wrong an
 This is mainly the two parameters
 
 ```
-PM = static  
-Pm.max_children = 1
+pm = static  
+pm.max_children = 1
 ```
 
 5. start php-fpm
 
 ```
-Sudo /usr/local/php7/sbin/php-fpm
+sudo /usr/local/php7/sbin/php-fpm
 ```
 
 6. Configuration of nginx, please consult the relevant information, please configure the nginx access directory into the source code tutorial directory, mainly the test. php, for testing
@@ -417,7 +417,7 @@ It is important to note that in chrome, two windows can be accessed, but the fol
 1. enter tutorial/, execute:
 
 ```
-Docker build -t php-fpm-coroutine ./
+docker build -t php-fpm-coroutine ./
 ```
 
 2. run docker:
@@ -429,7 +429,7 @@ docker run -p 8083:80 -v `pwd`:/data/soft/php-fpm-coroutine/tutorial php-fpm-cor
 3. browsers enter the URL
 
 ```
-Http://localhost:8083/test3.php
+http://localhost:8083/test3.php
 ```
 
 It can be seen that the output results are as follows:
