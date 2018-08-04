@@ -162,6 +162,7 @@ void RemoteRequestErrorCallback(enum evhttp_request_error error, void* arg)
 {
     sapi_coroutine_context* context = ((coro_http_param*)arg)->context;
     SG(coroutine_info).checkout_coroutine_context(context);
+    zval* return_value = context->return_value;
 
     zend_string* result = zend_string_init("remote request error!",strlen("remote request error!")*sizeof(char),0);
     RETVAL_STR(result);
