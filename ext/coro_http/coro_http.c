@@ -64,7 +64,6 @@ static int le_coro_http;
 typedef struct _coro_http_param
 {
     struct evdns_base* dnsbase;
-    struct evhttp_request* request;
     struct evhttp_connection* connection;
     struct evhttp_uri* uri;
     sapi_coroutine_context* context;
@@ -83,10 +82,10 @@ typedef struct _coro_http_param
  *   SG(coroutine_info).resume_coroutine_context();             继续执行上下文
  */
 
-void free_request(coro_http_param* http_param){
+void free_request(coro_http_param* http_param,struct evhttp_request* remote_rsp){
     evhttp_connection_free(http_param->connection);
     evhttp_uri_free(http_param->uri);
-    // evhttp_request_free(http_param->request);
+    evhttp_request_free(remote_rsp);
     evdns_base_free(http_param->dnsbase,0);
     free(http_param);
 }
@@ -95,14 +94,6 @@ int ReadHeaderDoneCallback(struct evhttp_request* remote_rsp, void* arg)
 {
     sapi_coroutine_context* context = ((coro_http_param*)arg)->context;
     SG(coroutine_info).checkout_coroutine_context(context);
-    char* tmpStr = (char*)emalloc(sizeof(char)*4096);
-    strcpy(tmpStr,"");
-
-    /**
-     * 注意，tmpStr是不能放在全局里的，因为多个协程操作会导致不安全
-     * 因此，tmpStr放在上下文里比较好
-     */
-    context->tmpData = (void*)tmpStr;
 }
 
 void ReadChunkCallback(struct evhttp_request* remote_rsp, void* arg)
@@ -130,6 +121,9 @@ void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
     sapi_coroutine_context* context = ((coro_http_param*)arg)->context;
     SG(coroutine_info).checkout_coroutine_context(context);
 
+    /**
+     * tmpStatus为0代表正常有结果，否则代表请求出错。返回值已被设置成错误提示
+     */
     char* tmpStr = (char*)context->tmpData;
 
     /**
@@ -141,16 +135,14 @@ void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
      * 从全局变量中获取返回结果的buffer,并创建zend_string类型的结果
      */
     zend_string* result = zend_string_init(tmpStr,strlen(tmpStr)*sizeof(char),0);
-
     /**
      * 设置函数返回值
      */
     RETVAL_STR(result);
 
-
     efree(tmpStr);
     context->tmpData = NULL;
-    free_request(arg);
+    free_request(arg,remote_rsp);
 
     /**
      * 继续执行当前协程的PHP脚本
@@ -162,36 +154,30 @@ void RemoteRequestErrorCallback(enum evhttp_request_error error, void* arg)
 {
     sapi_coroutine_context* context = ((coro_http_param*)arg)->context;
     SG(coroutine_info).checkout_coroutine_context(context);
-    zval* return_value = context->return_value;
-
-    zend_string* result;
+    char* tmpStr = (char*)context->tmpData;
     switch(error){
         case EVREQ_HTTP_TIMEOUT:
-            result = zend_string_init("remote request error:EVREQ_HTTP_TIMEOUT!",strlen("remote request error:EVREQ_HTTP_TIMEOUT!")*sizeof(char),0);
+            strncat(tmpStr,"remote request error:EVREQ_HTTP_TIMEOUT!",strlen("remote request error:EVREQ_HTTP_TIMEOUT!")*sizeof(char));
             break;
         case EVREQ_HTTP_EOF:
-            result = zend_string_init("remote request error:EVREQ_HTTP_EOF!",strlen("remote request error:EVREQ_HTTP_EOF!")*sizeof(char),0);
+            strncat(tmpStr,"remote request error:EVREQ_HTTP_EOF!",strlen("remote request error:EVREQ_HTTP_EOF!")*sizeof(char));
             break;
         case EVREQ_HTTP_INVALID_HEADER:
-            result = zend_string_init("remote request error:EVREQ_HTTP_INVALID_HEADER!",strlen("remote request error:EVREQ_HTTP_INVALID_HEADER!")*sizeof(char),0);
+            strncat(tmpStr,"remote request error:EVREQ_HTTP_INVALID_HEADER!",strlen("remote request error:EVREQ_HTTP_INVALID_HEADER!")*sizeof(char));
             break;
         case EVREQ_HTTP_BUFFER_ERROR:
-            result = zend_string_init("remote request error:EVREQ_HTTP_BUFFER_ERROR!",strlen("remote request error:EVREQ_HTTP_BUFFER_ERROR!")*sizeof(char),0);
+            strncat(tmpStr,"remote request error:EVREQ_HTTP_BUFFER_ERROR!",strlen("remote request error:EVREQ_HTTP_BUFFER_ERROR!")*sizeof(char));
             break;
         case EVREQ_HTTP_REQUEST_CANCEL:
-            result = zend_string_init("remote request error:EVREQ_HTTP_REQUEST_CANCEL!",strlen("remote request error:EVREQ_HTTP_REQUEST_CANCEL!")*sizeof(char),0);
+            strncat(tmpStr,"remote request error:EVREQ_HTTP_REQUEST_CANCEL!",strlen("remote request error:EVREQ_HTTP_REQUEST_CANCEL!")*sizeof(char));
             break;
         case EVREQ_HTTP_DATA_TOO_LONG:
-            result = zend_string_init("remote request error:EVREQ_HTTP_DATA_TOO_LONG!",strlen("remote request error:EVREQ_HTTP_DATA_TOO_LONG!")*sizeof(char),0);
+            strncat(tmpStr,"remote request error:EVREQ_HTTP_DATA_TOO_LONG!",strlen("remote request error:EVREQ_HTTP_DATA_TOO_LONG!")*sizeof(char));
             break;
         default:
-            result = zend_string_init("remote request error:unkown error!",strlen("remote request error:unkown error!")*sizeof(char),0);
+            strncat(tmpStr,"remote request error:unkown error!",strlen("remote request error:unkown error!")*sizeof(char));
             break;
     }
-
-    RETVAL_STR(result);
-    free_request(arg);
-    SG(coroutine_info).resume_coroutine_context();
 }
 
 void RemoteConnectionCloseCallback(struct evhttp_connection* connection, void* arg)
@@ -259,15 +245,23 @@ PHP_FUNCTION(coro_http_get)
     assert(dnsbase);
     
     coro_param->dnsbase = dnsbase;
-    
+
+    char* tmpStr = (char*)emalloc(sizeof(char)*4096);
+    strcpy(tmpStr,"");
+    /**
+     * 注意，tmpStr是不能放在全局里的，因为多个协程操作会导致不安全
+     * 因此，tmpStr放在上下文里比较好
+     */
+    SG(coroutine_info).context->tmpData = (void*)tmpStr;
 
 
     struct evhttp_request* request = evhttp_request_new(RemoteReadCallback, coro_param);
     evhttp_request_set_header_cb(request, ReadHeaderDoneCallback);
     evhttp_request_set_chunked_cb(request, ReadChunkCallback);
     evhttp_request_set_error_cb(request, RemoteRequestErrorCallback);
-    coro_param->request = request;
     
+
+
     const char* host = evhttp_uri_get_host(uri);
     if (!host)
     {
