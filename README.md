@@ -183,7 +183,7 @@ ext/coro_http 目录是为了测试协程开发的PHP扩展，提供了coro_http
 ```
 2.运行docker:
 ```
- docker run -p 8083:80 php-fpm-coroutine
+ docker run -p 8083:80 -v `pwd`:/data/soft/php-fpm-coroutine/tutorial php-fpm-coroutine
 ```
 3.浏览器输入网址
 ```
@@ -200,7 +200,6 @@ echo json_encode(coro_http_get("http://sp0.baidu.com/5a1Fazu8AA54nxGko9WTAnF6hhy
 ?>
 ```
 ----------
-**********
 
 # Project description[For English]
 
@@ -417,7 +416,7 @@ Docker build -t php-fpm-coroutine ./
 2. run docker:
 
 ```
-Docker run -p 8083:80 php-fpm-coroutine
+docker run -p 8083:80 -v `pwd`:/data/soft/php-fpm-coroutine/tutorial php-fpm-coroutine
 ```
 
 3. browsers enter the URL
