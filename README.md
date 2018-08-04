@@ -18,6 +18,9 @@
 
 提示：本项目未经过完整测试，请小心，不建议使用在生产环境。
 
+作者 email :sioomy@qq.com ,如有问题，请联系我。
+
+
 ## 协程原理
 
 ![avatar](/tutorial/pic/coroutine.jpg)
@@ -221,7 +224,7 @@ This project is through the transformation of the php-fpm source code, the imple
 
 Note: this item has not been completely tested. Please be careful not to use it in the production environment.
 
-
+Author email :sioomy@qq.com ,if you have question ,send message to me.
 
 ## Coroutine theory
 
