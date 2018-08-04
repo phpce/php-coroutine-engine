@@ -164,7 +164,31 @@ void RemoteRequestErrorCallback(enum evhttp_request_error error, void* arg)
     SG(coroutine_info).checkout_coroutine_context(context);
     zval* return_value = context->return_value;
 
-    zend_string* result = zend_string_init("remote request error!",strlen("remote request error!")*sizeof(char),0);
+    zend_string* result;
+    switch(error){
+        case EVREQ_HTTP_TIMEOUT:
+            result = zend_string_init("remote request error:EVREQ_HTTP_TIMEOUT!",strlen("remote request error:EVREQ_HTTP_TIMEOUT!")*sizeof(char),0);
+            break;
+        case EVREQ_HTTP_EOF:
+            result = zend_string_init("remote request error:EVREQ_HTTP_EOF!",strlen("remote request error:EVREQ_HTTP_EOF!")*sizeof(char),0);
+            break;
+        case EVREQ_HTTP_INVALID_HEADER:
+            result = zend_string_init("remote request error:EVREQ_HTTP_INVALID_HEADER!",strlen("remote request error:EVREQ_HTTP_INVALID_HEADER!")*sizeof(char),0);
+            break;
+        case EVREQ_HTTP_BUFFER_ERROR:
+            result = zend_string_init("remote request error:EVREQ_HTTP_BUFFER_ERROR!",strlen("remote request error:EVREQ_HTTP_BUFFER_ERROR!")*sizeof(char),0);
+            break;
+        case EVREQ_HTTP_REQUEST_CANCEL:
+            result = zend_string_init("remote request error:EVREQ_HTTP_REQUEST_CANCEL!",strlen("remote request error:EVREQ_HTTP_REQUEST_CANCEL!")*sizeof(char),0);
+            break;
+        case EVREQ_HTTP_DATA_TOO_LONG:
+            result = zend_string_init("remote request error:EVREQ_HTTP_DATA_TOO_LONG!",strlen("remote request error:EVREQ_HTTP_DATA_TOO_LONG!")*sizeof(char),0);
+            break;
+        default:
+            result = zend_string_init("remote request error:unkown error!",strlen("remote request error:unkown error!")*sizeof(char),0);
+            break;
+    }
+
     RETVAL_STR(result);
     free_request(arg);
     SG(coroutine_info).resume_coroutine_context();
