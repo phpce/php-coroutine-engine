@@ -180,15 +180,28 @@ ext/coro_http 目录是为了测试协程开发的PHP扩展，提供了coro_http
 这里一定要注意，在chrome中可以开两个窗口访问，但是后面的参数要不一样。  
 
 
-## 项目调试方法二，Docker安装[推荐]:
+## 项目调试方法二，Docker hub安装[推荐]:
+1.拉取镜像
+```
+docker pull phpcoro/php-fpm-coro  
+docker run --privileged -p 8083:80 phpcoro/php-fpm-coro
+```
+
+2.浏览器输入网址
+```
+ http://localhost:8083/test3.php
+```
+
+
+## 项目调试方法三，Docker build安装:
 
 1.进入tutorial/，执行:
 ```
- docker build -t php-fpm-coroutine ./
+ docker build -t php-fpm-coro ./
 ```
 2.运行docker:
 ```
- docker run --privileged -p 8083:80 -v `pwd`:/data/soft/php-fpm-coroutine/tutorial php-fpm-coroutine
+ docker run --privileged -p 8083:80 -v `pwd`:/data/soft/php-fpm-coroutine/tutorial php-fpm-coro
 ```
 3.浏览器输入网址
 ```
@@ -410,20 +423,32 @@ For example, http://localhost/test.php?a=xx
 It is important to note that in chrome, two windows can be accessed, but the following parameters are different.
 
 
-## Debug method two, Docker installation[recommended]:
+## Debug method two，Docker hub installation[recommended]:
+1.pull images from docker hub
+```
+docker pull phpcoro/php-fpm-coro  
+docker run --privileged -p 8083:80 phpcoro/php-fpm-coro
+```
+
+2.browsers enter the URL
+```
+ http://localhost:8083/test3.php
+```
+
+## Debug method three, Docker build installation[recommended]:
 
 
 
 1. enter tutorial/, execute:
 
 ```
-docker build -t php-fpm-coroutine ./
+docker build -t php-fpm-coro ./
 ```
 
 2. run docker:
 
 ```
-docker run --privileged -p 8083:80 -v `pwd`:/data/soft/php-fpm-coroutine/tutorial php-fpm-coroutine
+docker run --privileged -p 8083:80 -v `pwd`:/data/soft/php-fpm-coro/tutorial php-fpm-coro
 ```
 
 3. browsers enter the URL
