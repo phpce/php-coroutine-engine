@@ -435,7 +435,7 @@ docker run --privileged -p 8083:80 phpcoro/php-fpm-coro
  http://localhost:8083/test3.php
 ```
 
-## Debug method three, Docker build installation[recommended]:
+## Debug method three, Docker build installation:
 
 
 
