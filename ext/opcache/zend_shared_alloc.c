@@ -47,7 +47,7 @@
 static const zend_shared_memory_handlers *g_shared_alloc_handler = NULL;
 static const char *g_shared_model;
 /* pointer to globals allocated in SHM and shared across processes */
-zend_smm_shared_globals *smm_shared_globals;
+zend_smm_shared_globals *smm_shared_globals = NULL;
 
 #ifndef ZEND_WIN32
 #ifdef ZTS
@@ -148,6 +148,10 @@ static int zend_shared_alloc_try(const zend_shared_memory_handler_entry *he, siz
 
 int zend_shared_alloc_startup(size_t requested_size)
 {
+	if(smm_shared_globals){
+		return ALLOC_SUCCESS;
+	}
+
 	zend_shared_segment **tmp_shared_segments;
 	size_t shared_segments_array_size;
 	zend_smm_shared_globals tmp_shared_globals, *p_tmp_shared_globals;

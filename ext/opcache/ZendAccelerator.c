@@ -2526,6 +2526,10 @@ static inline int accel_find_sapi(void)
 
 static int zend_accel_init_shm(void)
 {
+	if(accel_shared_globals){
+		return SUCCESS;
+	}
+
 	int i;
 
 	zend_shared_alloc_lock();
