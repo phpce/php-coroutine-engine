@@ -151,8 +151,6 @@ typedef struct _sapi_coroutine_context{
  * 用于存储coroutine libevent
  */
 typedef struct _g_sapi_coroutine_info{
-    struct event_base *base;
-    int fcgi_fd;
     sapi_coroutine_context* context;//全局当前context
     int* context_count;//context池中context当前数量
     sapi_coroutine_context** context_pool;//未使用的context池   双向不闭合链表
@@ -162,6 +160,7 @@ typedef struct _g_sapi_coroutine_info{
     void(*checkout_coroutine_context)(sapi_coroutine_context* context);
     void(*resume_coroutine_context)();
     void(*yield_coroutine_context)();
+    struct event_base* (*get_event_base)();
     void(*close_request)();
     void(*fpm_request_executing)();
     void(*init_request)(void *request);

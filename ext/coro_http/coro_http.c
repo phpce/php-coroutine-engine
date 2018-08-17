@@ -73,7 +73,7 @@ typedef struct _coro_http_param
 
 /************************************************************************
  *   扩展需要用到的member
- *   SG(coroutine_info).base;                                   基础event_loop_base
+ *   SG(coroutine_info).get_event_base();                                   基础event_loop_base
  *   SG(coroutine_info).context                                 上下文
  *   SG(coroutine_info).tmpData                                 是一个void* 类型的空指针，用于临时存放数据
  *   SG(coroutine_info).test_log(char* str);                    输出LOG
@@ -85,7 +85,7 @@ typedef struct _coro_http_param
 void free_request(coro_http_param* http_param,struct evhttp_request* remote_rsp){
     evhttp_connection_free(http_param->connection);
     evhttp_uri_free(http_param->uri);
-    evhttp_request_free(remote_rsp);
+    // evhttp_request_free(remote_rsp);
     evdns_base_free(http_param->dnsbase,0);
     free(http_param);
 }
@@ -130,16 +130,16 @@ void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
      * return_value 是扩展函数执行时保存下来的返回值指针
      */
     zval* return_value = context->return_value;
-    
+
     /**
      * 从全局变量中获取返回结果的buffer,并创建zend_string类型的结果
      */
     zend_string* result = zend_string_init(tmpStr,strlen(tmpStr)*sizeof(char),0);
+
     /**
      * 设置函数返回值
      */
     RETVAL_STR(result);
-
     efree(tmpStr);
     context->tmpData = NULL;
     free_request(arg,remote_rsp);
@@ -229,7 +229,8 @@ PHP_FUNCTION(coro_http_get)
     /**
      * 这里与正常使用evhttp不同的是，要使用协程里的event_base，并且后面不需要调用loop方法（使用系统的loop）
      */
-    struct event_base *base = SG(coroutine_info).base;
+    struct event_base *base = SG(coroutine_info).get_event_base();
+
     if (!base)
     {
         zend_string* result = zend_string_init("event_base error!",strlen("event_base error!")*sizeof(char),0);
@@ -254,14 +255,11 @@ PHP_FUNCTION(coro_http_get)
      */
     SG(coroutine_info).context->tmpData = (void*)tmpStr;
 
-
     struct evhttp_request* request = evhttp_request_new(RemoteReadCallback, coro_param);
     evhttp_request_set_header_cb(request, ReadHeaderDoneCallback);
     evhttp_request_set_chunked_cb(request, ReadChunkCallback);
     evhttp_request_set_error_cb(request, RemoteRequestErrorCallback);
     
-
-
     const char* host = evhttp_uri_get_host(uri);
     if (!host)
     {
@@ -288,6 +286,7 @@ PHP_FUNCTION(coro_http_get)
     coro_param->connection = connection;
     evhttp_connection_set_closecb(connection, RemoteConnectionCloseCallback, base);
     evhttp_add_header(evhttp_request_get_output_headers(request), "Host", host);
+
     evhttp_make_request(connection, request, EVHTTP_REQ_GET, request_url);
 
     /**

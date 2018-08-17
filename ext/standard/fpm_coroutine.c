@@ -53,6 +53,9 @@ void asser_event_continue(void){
     }
 }
 
+struct event_base* get_event_base(){
+    return base;
+}
 
 /**
  * 注册libevent
@@ -103,8 +106,8 @@ int regist_event(int fcgi_fd,void (*do_accept())){
     base = event_base_new();//初始化libevent
     if (!base)  
         return 0; //libevent 初始化失败 
-
     listener_event = event_new(base, fcgi_fd, EV_READ|EV_PERSIST, do_accept, base);
+    evutil_make_socket_nonblocking(fcgi_fd);
 
     /* 添加事件 */  
     event_add(listener_event, NULL);
@@ -285,14 +288,13 @@ void init_coroutine_static(){
 }
 
 void init_coroutine_info(){
-    SG(coroutine_info).base = NULL;
-    SG(coroutine_info).fcgi_fd = NULL;
     SG(coroutine_info).context_count = &context_count;
     SG(coroutine_info).context = NULL;
     SG(coroutine_info).test_log = test_log;
     SG(coroutine_info).yield_coroutine_context = yield_coroutine_context;
     SG(coroutine_info).checkout_coroutine_context = checkout_coroutine_context;
     SG(coroutine_info).resume_coroutine_context = resume_coroutine_context;
+    SG(coroutine_info).get_event_base = get_event_base;
 
     SG(coroutine_info).context_pool = &global_coroutine_context_pool;
     SG(coroutine_info).context_use = &global_coroutine_context_use;

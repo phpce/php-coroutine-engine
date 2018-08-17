@@ -1864,8 +1864,6 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
     SG(coroutine_info).context = context;
     SG(sapi_started) = 0;
 
-    SG(coroutine_info).base = base;
-
     //上下文内私有
     zend_file_handle file_handle; 
     fcgi_request *request = fpm_init_request(fd);//初始化request
