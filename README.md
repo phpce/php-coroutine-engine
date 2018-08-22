@@ -195,13 +195,13 @@ docker run --privileged -p 8083:80 phpcoro/php-fpm-coro
 
 ## 项目调试方法三，Docker build安装:
 
-1.进入tutorial/，执行:
+1.进入项目根目录，执行:
 ```
- docker build -t php-fpm-coro ./
+ docker build -t php-fpm-coro -f tutorial/Dockerfile ./
 ```
 2.运行docker:
 ```
- docker run --privileged -p 8083:80 -v `pwd`:/data/soft/php-fpm-coroutine/tutorial php-fpm-coro
+ docker run --privileged -p 8083:80 -v `pwd`/tutorial:/data/soft/php-fpm-coroutine/tutorial php-fpm-coro
 ```
 3.浏览器输入网址
 ```
@@ -439,16 +439,16 @@ docker run --privileged -p 8083:80 phpcoro/php-fpm-coro
 
 
 
-1. enter tutorial/, execute:
+1. enter root dir of project, execute:
 
 ```
-docker build -t php-fpm-coro ./
+ docker build -t php-fpm-coro -f tutorial/Dockerfile ./
 ```
 
 2. run docker:
 
 ```
-docker run --privileged -p 8083:80 -v `pwd`:/data/soft/php-fpm-coro/tutorial php-fpm-coro
+docker run --privileged -p 8083:80 -v `pwd`/tutorial:/data/soft/php-fpm-coro/tutorial php-fpm-coro
 ```
 
 3. browsers enter the URL
