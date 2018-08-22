@@ -26,7 +26,7 @@ RUN yum -y install libicu-devel
 RUN yum -y install openldap-devel
 
 RUN yum -y install libxslt libxslt-devel
-RUN yum -y install libzip-devel
+#RUN yum -y install libzip-devel
 RUN yum -y install libedit-devel
 RUN yum -y install postgresql-devel
 RUN yum -y install gcc gcc-c++
