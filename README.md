@@ -184,7 +184,7 @@ ext/coro_http 目录是为了测试协程开发的PHP扩展，提供了coro_http
 1.拉取镜像
 ```
 docker pull phpcoro/php-fpm-coro  
-docker run --privileged -p 8083:80 phpcoro/php-fpm-coro
+docker run --privileged -p 8083:80 -v `pwd`:/data/www phpcoro/php-fpm-coro
 ```
 
 2.浏览器输入网址
@@ -201,7 +201,7 @@ docker run --privileged -p 8083:80 phpcoro/php-fpm-coro
 ```
 2.运行docker:
 ```
- docker run --privileged -p 8083:80 -v `pwd`/tutorial:/data/soft/php-fpm-coroutine/tutorial php-fpm-coro
+ docker run --privileged -p 8083:80 -v `pwd`/tutorial:/data/www php-fpm-coro
 ```
 3.浏览器输入网址
 ```
@@ -427,7 +427,7 @@ It is important to note that in chrome, two windows can be accessed, but the fol
 1.pull images from docker hub
 ```
 docker pull phpcoro/php-fpm-coro  
-docker run --privileged -p 8083:80 phpcoro/php-fpm-coro
+docker run --privileged -p 8083:80  -v `pwd`:/data/www phpcoro/php-fpm-coro
 ```
 
 2.browsers enter the URL
@@ -448,7 +448,7 @@ docker run --privileged -p 8083:80 phpcoro/php-fpm-coro
 2. run docker:
 
 ```
-docker run --privileged -p 8083:80 -v `pwd`/tutorial:/data/soft/php-fpm-coro/tutorial php-fpm-coro
+docker run --privileged -p 8083:80 -v `pwd`/tutorial:/data/www php-fpm-coro
 ```
 
 3. browsers enter the URL

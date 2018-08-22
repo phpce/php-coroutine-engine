@@ -1,6 +1,7 @@
 FROM centos:latest
 
 RUN mkdir -p /data/soft/
+RUN mkdir -p /data/www/
 
 RUN yum -y install git
 RUN yum -y install autoconf
