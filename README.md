@@ -195,7 +195,7 @@ docker run --privileged -p 8083:80 phpcoro/php-fpm-coro
 
 ## 项目调试方法三，Docker build安装:
 
-1.进入项目根目录，执行:
+1.进入项目根目录，执行:(如果在项目根目录执行过make ,请先执行make dist clean)
 ```
  docker build -t php-fpm-coro -f tutorial/Dockerfile ./
 ```
@@ -439,7 +439,7 @@ docker run --privileged -p 8083:80 phpcoro/php-fpm-coro
 
 
 
-1. enter root dir of project, execute:
+1. enter root dir of project, execute:(if you had make in this dir please run make dist clean)
 
 ```
  docker build -t php-fpm-coro -f tutorial/Dockerfile ./
