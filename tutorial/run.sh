@@ -74,3 +74,5 @@ cd /data/soft/php-coroutine-engine && sh buildconf --force && ./configure --pref
 /usr/local/php7/bin/pecl install redis
 
 cd /data/soft/nginx-1.14.0 && ./configure && make && make install
+
+rm -rf /data/soft
