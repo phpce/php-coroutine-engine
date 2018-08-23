@@ -2,7 +2,7 @@ FROM centos:latest
 
 ADD ./ /data/soft/php-coroutine-engine
 
-RUN sh ./tutorial/run.sh
+RUN cd /data/soft/php-coroutine-engine && sh ./tutorial/run.sh
 
 ADD ./tutorial/conf/nginx.conf /usr/local/nginx/conf/
 ADD ./tutorial/conf/www.conf /usr/local/php7/etc/php-fpm.d/
