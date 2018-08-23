@@ -1,6 +1,8 @@
 # 项目说明[中文]
 
-本项目是php-fpm的分支，已经实现php原生协程。
+项目名称PHPCE,全名PHP-Coroutine-Engine
+
+本项目是php7的分支，主要功能是在php7的基础上实现协程。
 
 这个项目是从php官方的github中fork出来的版本，基于php7.1.17版本。
 
@@ -183,8 +185,8 @@ ext/coro_http 目录是为了测试协程开发的PHP扩展，提供了coro_http
 ## 项目调试方法二，Docker hub安装[推荐]:
 1.拉取镜像
 ```
-docker pull phpcoro/php-fpm-coro  
-docker run --privileged -p 8083:80 -v `pwd`:/data/www phpcoro/php-fpm-coro
+docker pull phpce/php-coroutine-engine  
+docker run --privileged -p 8083:80 -v `pwd`:/data/www phpce/php-coroutine-engine
 ```
 
 2.浏览器输入网址
@@ -197,11 +199,11 @@ docker run --privileged -p 8083:80 -v `pwd`:/data/www phpcoro/php-fpm-coro
 
 1.进入项目根目录，执行:(如果在项目根目录执行过make ,请先执行make dist clean)
 ```
- docker build -t php-fpm-coro -f tutorial/Dockerfile ./
+ docker build -t php-coroutine-engine -f tutorial/Dockerfile ./
 ```
 2.运行docker:
 ```
- docker run --privileged -p 8083:80 -v `pwd`/tutorial:/data/www php-fpm-coro
+ docker run --privileged -p 8083:80 -v `pwd`/tutorial:/data/www php-coroutine-engine
 ```
 3.浏览器输入网址
 ```
@@ -221,7 +223,9 @@ echo json_encode(coro_http_get("http://sp0.baidu.com/5a1Fazu8AA54nxGko9WTAnF6hhy
 
 # Project description[For English]
 
-This project is a branch of php-fpm and has implemented PHP Native Coroutine.
+Project name phpce,full name php-coroutine-engine
+
+This project is a branch of php7 and has implemented PHP Native Coroutine.
 
 This project is a version from PHP's official GitHub fork, based on php7.1.17 version.
 
@@ -426,8 +430,8 @@ It is important to note that in chrome, two windows can be accessed, but the fol
 ## Debug method two，Docker hub installation[recommended]:
 1.pull images from docker hub
 ```
-docker pull phpcoro/php-fpm-coro  
-docker run --privileged -p 8083:80  -v `pwd`:/data/www phpcoro/php-fpm-coro
+docker pull phpce/php-coroutine-engine  
+docker run --privileged -p 8083:80  -v `pwd`:/data/www phpce/php-coroutine-engine
 ```
 
 2.browsers enter the URL
@@ -442,13 +446,13 @@ docker run --privileged -p 8083:80  -v `pwd`:/data/www phpcoro/php-fpm-coro
 1. enter root dir of project, execute:(if you had make in this dir please run make dist clean)
 
 ```
- docker build -t php-fpm-coro -f tutorial/Dockerfile ./
+ docker build -t php-coroutine-engine -f tutorial/Dockerfile ./
 ```
 
 2. run docker:
 
 ```
-docker run --privileged -p 8083:80 -v `pwd`/tutorial:/data/www php-fpm-coro
+docker run --privileged -p 8083:80 -v `pwd`/tutorial:/data/www php-coroutine-engine
 ```
 
 3. browsers enter the URL

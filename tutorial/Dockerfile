@@ -56,9 +56,9 @@ RUN ln -s /usr/lib64/liblber* /usr/lib/
 RUN ln -s /usr/lib64/libz* /usr/lib/
 
 #add from github
-#RUN cd /data/soft/ && git clone https://github.com/phpcoro/php-fpm-coro.git
+#RUN cd /data/soft/ && git clone https://github.com/phpce/php-coroutine-engine.git
 #add from local
-ADD ./ /data/soft/php-fpm-coro
+ADD ./ /data/soft/php-coroutine-engine
 
 
 RUN cd /data/soft/ && wget https://github.com/libevent/libevent/releases/download/release-2.1.8-stable/libevent-2.1.8-stable.tar.gz
@@ -74,11 +74,11 @@ RUN echo '/usr/local/lib64\
 /usr/lib\
 /usr/lib64'>>/etc/ld.so.conf&&ldconfig -v
 
-RUN cd /data/soft/php-fpm-coro && sh buildconf --force && ./configure --prefix=/usr/local/php7  --enable-fpm --enable-coro_http --enable-mysqlnd --enable-zip --with-pdo-mysql --with-openssl --enable-maintainer-zts --enable-opcache --with-curl --enable-bcmath --enable-calendar  --enable-dtrace --enable-exif --enable-ftp  --enable-mbregex --enable-mbstring --enable-pcntl --enable-phpdbg --enable-phpdbg-webhelper --enable-shmop --enable-soap --enable-sockets --enable-sysvmsg --enable-sysvsem --enable-sysvshm --enable-wddx  --with-bz2 --with-iconv --with-pic --with-xmlrpc  --with-mhash --with-mysql-sockunixunix=/tmp/mysql.sock --with-mysqli=mysqlnd --with-pdo-mysql=mysqlnd --with-kerberos --with-layout=GNU   --with-mcrypt=/usr/include --with-gd --with-jpeg-dir=/usr/include --with-png-dir=/usr/include  --with-webp-dir=/usr/include --with-freetype-dir=/usr/include --with-icu-dir=/usr --with-pspell --with-xsl --with-libzip=/usr/local --enable-zip --with-zlib --with-pdo-dblib --with-pdo-odbc=unixODBC,/usr --with-unixODBC=/usr --with-libedit --enable-dba --with-ldap --with-ldap-sasl --with-pdo-pgsql --with-pgsql --with-gdbm --enable-intl --with-gettext && make && make install
+RUN cd /data/soft/php-coroutine-engine && sh buildconf --force && ./configure --prefix=/usr/local/php7  --enable-fpm --enable-coro_http --enable-mysqlnd --enable-zip --with-pdo-mysql --with-openssl --enable-maintainer-zts --enable-opcache --with-curl --enable-bcmath --enable-calendar  --enable-dtrace --enable-exif --enable-ftp  --enable-mbregex --enable-mbstring --enable-pcntl --enable-phpdbg --enable-phpdbg-webhelper --enable-shmop --enable-soap --enable-sockets --enable-sysvmsg --enable-sysvsem --enable-sysvshm --enable-wddx  --with-bz2 --with-iconv --with-pic --with-xmlrpc  --with-mhash --with-mysql-sockunixunix=/tmp/mysql.sock --with-mysqli=mysqlnd --with-pdo-mysql=mysqlnd --with-kerberos --with-layout=GNU   --with-mcrypt=/usr/include --with-gd --with-jpeg-dir=/usr/include --with-png-dir=/usr/include  --with-webp-dir=/usr/include --with-freetype-dir=/usr/include --with-icu-dir=/usr --with-pspell --with-xsl --with-libzip=/usr/local --enable-zip --with-zlib --with-pdo-dblib --with-pdo-odbc=unixODBC,/usr --with-unixODBC=/usr --with-libedit --enable-dba --with-ldap --with-ldap-sasl --with-pdo-pgsql --with-pgsql --with-gdbm --enable-intl --with-gettext && make && make install
 
-RUN /usr/local/php7/bin/pecl install redis-3.1.2
+#RUN /usr/local/php7/bin/pecl install redis-3.1.2
 #if you need redis 4.1.1 then use this
-#RUN /usr/local/php7/bin/pecl install redis-4.1.1
+RUN /usr/local/php7/bin/pecl install redis
 
 RUN cd /data/soft/nginx-1.14.0 && ./configure && make && make install
 
