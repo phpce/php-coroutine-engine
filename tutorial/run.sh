@@ -75,4 +75,11 @@ cd /data/soft/php-coroutine-engine && sh buildconf --force && ./configure --pref
 
 cd /data/soft/nginx-1.14.0 && ./configure && make && make install
 
+cd /data/soft/php-coroutine-engine
+cp ./tutorial/conf/nginx.conf /usr/local/nginx/conf/
+cp ./tutorial/conf/www.conf /usr/local/php7/etc/php-fpm.d/
+cp ./tutorial/conf/php-fpm.conf /usr/local/php7/etc/
+cp ./tutorial/conf/php.ini /usr/local/php7/etc/
+cp ./tutorial/conf/supervisord.conf /etc/supervisord.conf
+cd /
 rm -rf /data/soft
