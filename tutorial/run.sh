@@ -32,7 +32,7 @@ yum -y install libxml2-devel
 
 #安装yum扩展包
 yum -y install epel-release
-yum -y update
+#yum -y update
 
 yum -y install libmcrypt-devel
 yum -y install gettext-devel
