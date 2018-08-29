@@ -108,6 +108,8 @@ int __riscosify_control = __RISCOSIFY_STRICT_UNIX_SPECS;
 #include "fpm_log.h"
 #include "zlog.h"
 
+#include <event2/event.h>
+#include <event2/bufferevent.h>
 
 
 // coroutine begin ====
@@ -1852,23 +1854,38 @@ int close_request(){
     /* end of fastcgi loop */
 }
 
-void do_accept(evutil_socket_t listener, short event, void *arg)  
-{  
+typedef struct _event_param
+{
+	int fd;
+    sapi_coroutine_context* context;
+} event_param;
 
-    struct event_base *base = arg;  
-    struct sockaddr_storage ss;  
-    socklen_t slen = sizeof(ss);  
-    int fd = accept(listener, (struct sockaddr*)&ss, &slen);  
+void event_cb(struct bufferevent *bev, short event, void *arg)
+{
+	sapi_coroutine_context* context = (sapi_coroutine_context*)arg;
+    checkout_coroutine_context(context);
+	// if(event & BEV_EVENT_EOF)
+	// 	test_log("connection closed\n");
+	// else if (event & BEV_EVENT_ERROR)
+	// 	test_log("some other error\n");
+	bufferevent_free(bev);
+}
 
-    sapi_coroutine_context* context = use_coroutine_context();
-    SG(coroutine_info).context = context;
-    SG(sapi_started) = 0;
+void socket_read_cb(struct bufferevent *bev, void *arg)
+{
+	sapi_coroutine_context* context = (sapi_coroutine_context*)arg;
+    checkout_coroutine_context(context);
+	int fd = context->fd;
+
+	evutil_make_socket_nonblocking(context->fd);
 
     //上下文内私有
     zend_file_handle file_handle; 
     fcgi_request *request = fpm_init_request(fd);//初始化request
 
     fcgi_set_fd(request,fd);//设置libevnet fd
+
+    fcgi_set_bev(request,bev);
 
     init_coroutine_set_request(context,request);
     
@@ -1901,6 +1918,7 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
 	if (UNEXPECTED(!SG(request_info).request_method)) {
 		goto fastcgi_request_done2;
 	}
+
 	if (UNEXPECTED(fpm_status_handle_request())) {//初始化header相关信息
 		goto fastcgi_request_done2;
 	}
@@ -1968,6 +1986,32 @@ fastcgi_request_done2:
     free_coroutine_context(SG(coroutine_info).context);
 }  
 
+void do_accept(evutil_socket_t listener, short event, void *arg)  
+{  
+	sapi_coroutine_context* context = use_coroutine_context();
+    SG(coroutine_info).context = context;
+    SG(sapi_started) = 0;
+
+    struct event_base *base = arg;  
+    struct sockaddr_storage ss;  
+    socklen_t slen = sizeof(ss);
+    context->fd = accept(listener, (struct sockaddr*)&ss, &slen);
+	evutil_make_socket_nonblocking(context->fd);
+
+	// char txt3[100];
+	// sprintf(txt3,"fd:%d,pid:%d\n",context->fd,getpid());
+	// test_log(txt3);
+
+	// struct bufferevent* bev = bufferevent_socket_new(base, context->fd, BEV_OPT_THREADSAFE | BEV_OPT_UNLOCK_CALLBACKS);
+	struct bufferevent* bev = bufferevent_socket_new(base, context->fd, BEV_OPT_CLOSE_ON_FREE);
+	// struct bufferevent* bev = bufferevent_socket_new(base, context->fd, 0);
+	context->bev = bev;
+	bufferevent_setcb(bev, socket_read_cb, NULL, event_cb, context);
+
+	bufferevent_enable(bev, EV_READ | EV_WRITE | EV_PERSIST);
+
+}
+
 /* {{{ main
  */
 int main(int argc, char *argv[])
@@ -2008,7 +2052,13 @@ int main(int argc, char *argv[])
 #endif
 #endif
 
-int coroutine_count = 128;
+int coroutine_count;
+char* engine_count = getenv("PHP_COROUTINE_ENGINE_COUNT");
+if(engine_count==NULL){
+	coroutine_count = 128;
+}else{
+	coroutine_count = atoi(engine_count);
+}
 int coroutine_index = 0;
 
 #ifdef ZTS

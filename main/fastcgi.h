@@ -136,6 +136,8 @@ void fcgi_free_mgmt_var_cb(zval *zv);
  */
 void fcgi_set_fd(fcgi_request *req,int fd);
 int fcgi_get_fd(fcgi_request *req);
+void fcgi_set_bev(fcgi_request *req,void* bev);
+struct bufferevent *fcgi_get_bev(fcgi_request *req);
 //自定义，初始化req回调
 void init_request_callback(fcgi_request *req);
 /*

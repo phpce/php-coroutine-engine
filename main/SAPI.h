@@ -144,7 +144,8 @@ typedef struct _sapi_coroutine_context{
     int thread_id;
     zval* return_value;
     void* tmpData;//use to store data
-
+    int fd;
+    struct bufferevent* bev;
 } sapi_coroutine_context;
 
 /**
@@ -161,6 +162,7 @@ typedef struct _g_sapi_coroutine_info{
     void(*resume_coroutine_context)();
     void(*yield_coroutine_context)();
     struct event_base* (*get_event_base)();
+    struct evdns_base* (*get_evdns_base)();
     void(*close_request)();
     void(*fpm_request_executing)();
     void(*init_request)(void *request);

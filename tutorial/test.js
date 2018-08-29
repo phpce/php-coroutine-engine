@@ -9,7 +9,7 @@ var server = http.createServer(function(req,res){
     res.setHeader('Content-Type','text/plain');
 	setTimeout(function(){
     	res.end("hello nodejs");
-	},2000);
+	},5000);
 
 });
 server.listen(port,hostName,function(){

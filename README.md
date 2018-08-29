@@ -127,7 +127,17 @@ nginx 占用cpu略低于php-fpm，换个角度来讲，php-fpm协程的性能已
 ## 注意事项
 
 
-1.请牢记这一点，php-fpm协程中，固定每个php-fpm进程的协程池大小为128个.超出的并发会等待。要想机器拥有更好的并发，请合理配置进程数量。服务能承受的总并发数为所有进程协程池大小的总和。
+1.请牢记这一点，php-fpm协程中，默认每个php-fpm进程的协程池大小为128个.超出的并发会等待。要想机器拥有更好的并发，请合理设置每进程的协程数，可以通过修改环境变量来配置。
+
+修改每个进程中协程池大小方法：
+
+首先切换到root账号，在环境变量中增加环境变量（PHP_COROUTINE_ENGINE_COUNT环境变量指定每个进程开启的协程数）
+echo 'export PHP_COROUTINE_ENGINE_COUNT=1024' >> ~/.bash_profile
+source ~/.bash_profile
+在/etc/sudoers中修改配置，用来支持sudo的环境变量传递： 
+Defaults    env_reset 
+为： 
+Defaults    !env_reset
 
 2.启动时，请注意调整好PHP-FPM进程数量,php-fpm.d/www.conf中
 ```
@@ -186,7 +196,7 @@ ext/coro_http 目录是为了测试协程开发的PHP扩展，提供了coro_http
 1.拉取镜像
 ```
 docker pull phpce/php-coroutine-engine  
-docker run --privileged -p 8083:80 -v `pwd`:/data/www phpce/php-coroutine-engine
+docker run --privileged --cpus=2 -e 'PHP_COROUTINE_ENGINE_COUNT=128' -p 8083:80 -v `pwd`:/data/www phpce/php-coroutine-engine
 ```
 
 2.浏览器输入网址
@@ -203,7 +213,7 @@ docker run --privileged -p 8083:80 -v `pwd`:/data/www phpce/php-coroutine-engine
 ```
 2.运行docker:
 ```
- docker run --privileged -p 8083:80 -v `pwd`/tutorial:/data/www php-coroutine-engine
+ docker run --privileged --cpus=2 -e 'PHP_COROUTINE_ENGINE_COUNT=128' -p 8083:80 -v `pwd`/tutorial:/data/www php-coroutine-engine
 ```
 3.浏览器输入网址
 ```
@@ -355,7 +365,25 @@ Finally, because the machine presses the machine, there are more services. If se
 
 ## Matters of attention
 
-1. Keep this in mind. In php-fpm syndication, the coroutine pool size of each php-fpm process is fixed to 128. If you want the machine to have better concurrency, please configure the process number reasonably. The total number of concurrent services that can be sustained is the sum of all process pool size.
+1. Keep this in mind. In php-fpm, the coroutine pool size of each php-fpm process is fixed to 128 by default. If you want the machine to have better concurrency, please configure the process number reasonably. you can set the coroutine number in environmental variables.
+
+Modify the coroutine pool size in each process:
+
+First,Checkout to root user,then add environmental variables in environmental variables(PHP_COROUTINE_ENGINE_COUNT is couroutine number in every process)
+```
+echo 'export PHP_COROUTINE_ENGINE_COUNT=1024' >> ~/.bash_profile
+
+source ~/.bash_profile
+
+```
+Modify configuration in /etc/sudoers to support sudo's environment variable delivery:
+```
+Defaults env_reset
+```
+For:
+```
+Defaults! Env_reset
+```
 
 2. when starting, pay attention to adjusting the number of PHP-FPM processes, php-fpm.d/www.conf
 
@@ -431,7 +459,7 @@ It is important to note that in chrome, two windows can be accessed, but the fol
 1.pull images from docker hub
 ```
 docker pull phpce/php-coroutine-engine  
-docker run --privileged -p 8083:80  -v `pwd`:/data/www phpce/php-coroutine-engine
+docker run --privileged --cpus=2 -e 'PHP_COROUTINE_ENGINE_COUNT=128' -p 8083:80  -v `pwd`:/data/www phpce/php-coroutine-engine
 ```
 
 2.browsers enter the URL
@@ -452,7 +480,7 @@ docker run --privileged -p 8083:80  -v `pwd`:/data/www phpce/php-coroutine-engin
 2. run docker:
 
 ```
-docker run --privileged -p 8083:80 -v `pwd`/tutorial:/data/www php-coroutine-engine
+docker run --privileged --cpus=2 -e 'PHP_COROUTINE_ENGINE_COUNT=128' -p 8083:80 -v `pwd`/tutorial:/data/www php-coroutine-engine
 ```
 
 3. browsers enter the URL

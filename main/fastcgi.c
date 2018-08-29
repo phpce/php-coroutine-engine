@@ -35,6 +35,9 @@
 
 #include <windows.h>
 
+#include <event2/event.h>
+#include <event2/bufferevent.h>
+
 typedef unsigned int in_addr_t;
 
 struct sockaddr_un {
@@ -213,6 +216,7 @@ struct _fcgi_request {
 	int            listen_socket;
 	int            tcp;
 	int            fd;
+	struct bufferevent *bev;
 	int            id;
 	int            keep;
 #ifdef TCP_NODELAY
@@ -919,8 +923,12 @@ void fcgi_destroy_request(fcgi_request *req) {
 	free(req);
 }
 
+
 static inline ssize_t safe_write(fcgi_request *req, const void *buf, size_t count)
 {
+
+	// bufferevent_write(req->bev, ((char*)buf), count);
+	// return count;
 	int    ret;
 	size_t n = 0;
 
@@ -936,16 +944,20 @@ static inline ssize_t safe_write(fcgi_request *req, const void *buf, size_t coun
 			unsigned int out_len = tmp > UINT_MAX ? UINT_MAX : (unsigned int)tmp;
 
 			ret = write(req->fd, ((char*)buf)+n, out_len);
+			// ret = bufferevent_write(req->bev, ((char*)buf)+n, out_len);
 		} else {
 			int out_len = tmp > INT_MAX ? INT_MAX : (int)tmp;
 
 			ret = send(req->fd, ((char*)buf)+n, out_len, 0);
+			// ret = bufferevent_write(req->bev, ((char*)buf)+n, out_len);
 			if (ret <= 0) {
 				errno = WSAGetLastError();
 			}
 		}
 #else
 		ret = write(req->fd, ((char*)buf)+n, count-n);
+		// bufferevent_write(req->bev, ((char*)buf)+n, count-n);
+		// ret = count-n;
 #endif
 		if (ret > 0) {
 			n += ret;
@@ -958,6 +970,8 @@ static inline ssize_t safe_write(fcgi_request *req, const void *buf, size_t coun
 
 static inline ssize_t safe_read(fcgi_request *req, const void *buf, size_t count)
 {
+	// int n = bufferevent_read(req->bev, ((char*)buf), count);
+	// return n;
 	int    ret;
 	size_t n = 0;
 
@@ -972,17 +986,20 @@ static inline ssize_t safe_read(fcgi_request *req, const void *buf, size_t count
 		if (!req->tcp) {
 			unsigned int in_len = tmp > UINT_MAX ? UINT_MAX : (unsigned int)tmp;
 
-			ret = read(req->fd, ((char*)buf)+n, in_len);
+			// ret = read(req->fd, ((char*)buf)+n, in_len);
+			ret = bufferevent_read(req->bev, ((char*)buf)+n, in_len);
 		} else {
 			int in_len = tmp > INT_MAX ? INT_MAX : (int)tmp;
 
 			ret = recv(req->fd, ((char*)buf)+n, in_len, 0);
+			// ret = bufferevent_read(req->bev, ((char*)buf)+n, in_len);
 			if (ret <= 0) {
 				errno = WSAGetLastError();
 			}
 		}
 #else
-		ret = read(req->fd, ((char*)buf)+n, count-n);
+		// ret = read(req->fd, ((char*)buf)+n, count-n);
+		ret = bufferevent_read(req->bev, ((char*)buf)+n, count-n);
 #endif
 		if (ret > 0) {
 			n += ret;
@@ -1730,6 +1747,17 @@ void fcgi_set_fd(fcgi_request *req,int fd)
 int fcgi_get_fd(fcgi_request *req)
 {
     return req->fd;
+}
+
+//自定义，写入bev
+void fcgi_set_bev(fcgi_request *req,void* bev)
+{
+    req->bev = (struct bufferevent*)bev;
+}
+
+struct bufferevent *fcgi_get_bev(fcgi_request *req)
+{
+    return req->bev;
 }
 
 //自定义，初始化req回调

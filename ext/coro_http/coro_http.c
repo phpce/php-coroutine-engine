@@ -42,6 +42,7 @@
 #include "event2/dns.h"
 #include "event2/thread.h"
 #include <event.h>
+#include <event2/bufferevent.h>
 
 #include "ext/standard/fpm_coroutine.h"
 
@@ -63,7 +64,6 @@ static int le_coro_http;
 
 typedef struct _coro_http_param
 {
-    struct evdns_base* dnsbase;
     struct evhttp_connection* connection;
     struct evhttp_uri* uri;
     sapi_coroutine_context* context;
@@ -82,11 +82,10 @@ typedef struct _coro_http_param
  *   SG(coroutine_info).resume_coroutine_context();             继续执行上下文
  */
 
-void free_request(coro_http_param* http_param,struct evhttp_request* remote_rsp){
-    evhttp_connection_free(http_param->connection);
+void free_request(coro_http_param* http_param){
+    // evhttp_connection_free(http_param->connection);
+    // evhttp_connection_free_on_completion(http_param->connection);
     evhttp_uri_free(http_param->uri);
-    // evhttp_request_free(remote_rsp);
-    evdns_base_free(http_param->dnsbase,0);
     free(http_param);
 }
 
@@ -94,6 +93,17 @@ int ReadHeaderDoneCallback(struct evhttp_request* remote_rsp, void* arg)
 {
     sapi_coroutine_context* context = ((coro_http_param*)arg)->context;
     SG(coroutine_info).checkout_coroutine_context(context);
+
+    char txt[1024];
+    sprintf(txt, "< HTTP/1.1 %d %s\n", evhttp_request_get_response_code(remote_rsp), evhttp_request_get_response_code_line(remote_rsp));
+    struct evkeyvalq* headers = evhttp_request_get_input_headers(remote_rsp);
+    // struct evkeyval* header;
+    // TAILQ_FOREACH(header, headers, next)
+    // {
+    //     fprintf(stderr, "< %s: %s\n", header->key, header->value);
+    // }
+    // fprintf(stderr, "< \n");
+    // SG(coroutine_info).test_log(txt);
 }
 
 void ReadChunkCallback(struct evhttp_request* remote_rsp, void* arg)
@@ -121,6 +131,8 @@ void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
     sapi_coroutine_context* context = ((coro_http_param*)arg)->context;
     SG(coroutine_info).checkout_coroutine_context(context);
 
+    // bufferevent_free(remote_rsp);
+
     /**
      * tmpStatus为0代表正常有结果，否则代表请求出错。返回值已被设置成错误提示
      */
@@ -142,7 +154,10 @@ void RemoteReadCallback(struct evhttp_request* remote_rsp, void* arg)
     RETVAL_STR(result);
     efree(tmpStr);
     context->tmpData = NULL;
-    free_request(arg,remote_rsp);
+    free_request(arg);
+
+
+    // SG(coroutine_info).test_log("request done\n");
 
     /**
      * 继续执行当前协程的PHP脚本
@@ -237,16 +252,15 @@ PHP_FUNCTION(coro_http_get)
         RETURN_STR(result);
     }
 
-    struct evdns_base* dnsbase = evdns_base_new(base, 1);
+    struct evdns_base* dnsbase = SG(coroutine_info).get_evdns_base(); 
     if (!dnsbase)
     {
         zend_string* result = zend_string_init("dnsbase error!",strlen("dnsbase error!")*sizeof(char),0);
         RETURN_STR(result);
+
     }
     assert(dnsbase);
     
-    coro_param->dnsbase = dnsbase;
-
     char* tmpStr = (char*)emalloc(sizeof(char)*4096);
     strcpy(tmpStr,"");
     /**
@@ -294,6 +308,154 @@ PHP_FUNCTION(coro_http_get)
      */
     SG(coroutine_info).yield_coroutine_context();
 }
+
+
+void readcb(struct bufferevent* bev, void * arg)  
+{  
+    sapi_coroutine_context* context = ((coro_http_param*)arg)->context;
+    SG(coroutine_info).checkout_coroutine_context(context);
+    char* tmpStr = (char*)emalloc(sizeof(char)*4096);
+    strcpy(tmpStr,"");
+
+    char buf[1024];  
+    int n;  
+    struct evbuffer* input = bufferevent_get_input(bev);  
+    while ((n = evbuffer_remove(input, buf, sizeof(buf))) > 0)   
+    {  
+        // fwrite(buf, 1, n, stdout);  
+        strncat(tmpStr,buf,n);
+    }  
+
+
+
+    /**
+    * tmpStatus为0代表正常有结果，否则代表请求出错。返回值已被设置成错误提示
+    */
+    // char* tmpStr = (char*)context->tmpData;
+
+    /**
+    * return_value 是扩展函数执行时保存下来的返回值指针
+    */
+    zval* return_value = context->return_value;
+
+    /**
+    * 从全局变量中获取返回结果的buffer,并创建zend_string类型的结果
+    */
+    zend_string* result = zend_string_init(tmpStr,strlen(tmpStr)*sizeof(char),0);
+
+    /**
+    * 设置函数返回值
+    */
+    RETVAL_STR(result);
+    free_request(arg);
+    efree(tmpStr);
+
+    /**
+    * 继续执行当前协程的PHP脚本
+    */
+    SG(coroutine_info).resume_coroutine_context();
+
+}  
+void eventcb(struct bufferevent* bev, short events, void * arg)  
+{  
+    sapi_coroutine_context* context = ((coro_http_param*)arg)->context;
+    SG(coroutine_info).checkout_coroutine_context(context);
+
+
+    if (events & BEV_EVENT_CONNECTED)   
+    {  
+        // printf("Connect okay.\n");  
+    }   
+    else if (events & (BEV_EVENT_ERROR|BEV_EVENT_EOF))  
+    {   
+        if (events & BEV_EVENT_ERROR)   
+        {  
+            int err = bufferevent_socket_get_dns_error(bev);  
+            if (err)  
+            printf("DNS error: %s\n", evutil_gai_strerror(err));  
+        }  
+
+        bufferevent_free(bev);   
+
+        
+    }  
+}  
+
+
+PHP_FUNCTION(ce_http_get)
+{
+    /**
+     * 保存ce_http_get返回值指针到协程中，当evhttp返回时会用到
+     */
+    SG(coroutine_info).context->return_value = return_value; 
+
+    zval* param;
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z", &param) == FAILURE){
+        zend_string* result = zend_string_init("param error!",strlen("param error!")*sizeof(char),0);
+        RETURN_STR(result);
+    }
+    char* url = ZSTR_VAL(zval_get_string(param));
+
+    struct evhttp_uri* uri = evhttp_uri_parse(url);
+    coro_http_param* coro_param = malloc(sizeof(coro_http_param));
+    coro_param->context = SG(coroutine_info).context;
+    coro_param->uri = uri;
+
+    if (!uri)
+    {
+        zend_string* result = zend_string_init("uri create error!",strlen("uri create error!")*sizeof(char),0);
+        RETURN_STR(result);
+    }
+
+    const char* host = evhttp_uri_get_host(uri);
+    if (!host)
+    {
+        zend_string* result = zend_string_init("host error!",strlen("host error!")*sizeof(char),0);
+        RETURN_STR(result);
+    }
+
+    int port = evhttp_uri_get_port(uri);
+    if (port < 0) port = 80;
+
+    // const char* request_url = url;
+    const char* path = evhttp_uri_get_path(uri);
+    // if (path == NULL || strlen(path) == 0)
+    // {
+    //     request_url = "/";
+    // }
+
+
+    /**
+     * 这里与正常使用不同的是，要使用协程里的event_base，并且后面不需要调用loop方法（使用系统的loop）
+     */
+    struct event_base *base = SG(coroutine_info).get_event_base();
+    struct evdns_base *dnsbase = SG(coroutine_info).get_evdns_base(); 
+    struct bufferevent* bev;
+
+
+    bev = bufferevent_socket_new(base, -1, BEV_OPT_CLOSE_ON_FREE);  
+    bufferevent_setcb(bev, readcb, NULL, eventcb, coro_param);  
+    bufferevent_enable(bev, EV_READ|EV_WRITE);  
+    evbuffer_add_printf(bufferevent_get_output(bev), "GET %s\r\n", path);  
+    bufferevent_socket_connect_hostname(bev, dnsbase, AF_UNSPEC, host, port);  
+
+    /**
+     * 请求发出后，立刻释放当前协程，将控制权交给协程控制器(php-fpm)
+     */
+    SG(coroutine_info).yield_coroutine_context();
+}
+
+
+PHP_FUNCTION(ce_context_index)
+{
+  RETURN_LONG(SG(coroutine_info).context->thread_id);
+}
+
+PHP_FUNCTION(ce_context_fd)
+{
+  RETURN_LONG(SG(coroutine_info).context->fd);
+}
+
 /* }}} */
 /* The previous line is meant for vim and emacs, so it can correctly fold and
    unfold functions in source code. See the corresponding marks just before
@@ -375,7 +537,10 @@ PHP_MINFO_FUNCTION(coro_http)
  * Every user visible function must have an entry in coro_http_functions[].
  */
 const zend_function_entry coro_http_functions[] = {
-	PHP_FE(coro_http_get,	NULL)		/* For testing, remove later. */
+	PHP_FE(coro_http_get,	NULL)	
+    PHP_FE(ce_http_get, NULL) 
+    PHP_FE(ce_context_index, NULL) 
+    PHP_FE(ce_context_fd, NULL) 
 	PHP_FE_END	/* Must be the last line in coro_http_functions[] */
 };
 /* }}} */

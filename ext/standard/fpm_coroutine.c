@@ -8,6 +8,7 @@
 #endif
 
 #include <event2/event.h>
+#include "event2/dns.h"
 /* For sockaddr_in */  
 #include <netinet/in.h>
 #include "SAPI.h"
@@ -18,9 +19,11 @@
 
 
 sapi_coroutine_context* global_coroutine_context_pool = NULL;
+sapi_coroutine_context* global_coroutine_context_pool_end = NULL;
 sapi_coroutine_context* global_coroutine_context_use = NULL;
 int context_count;
 struct event_base *base;
+struct evdns_base *dnsbase;
 struct event *listener_event;
 int listener_event_stop = 0;
 
@@ -57,6 +60,10 @@ struct event_base* get_event_base(){
     return base;
 }
 
+struct evdns_base* get_evdns_base(){
+    return dnsbase;
+}
+
 /**
  * 注册libevent
  */
@@ -65,6 +72,10 @@ int regist_event(int fcgi_fd,void (*do_accept())){
     base = event_base_new();//初始化libevent
     if (!base)  
         return 0; //libevent 初始化失败 
+    dnsbase = evdns_base_new(base, 1);
+    if (!dnsbase)
+        return 0;
+
     listener_event = event_new(base, fcgi_fd, EV_READ|EV_PERSIST, do_accept, base);
     evutil_make_socket_nonblocking(fcgi_fd);
 
@@ -156,19 +167,26 @@ void free_coroutine_context(sapi_coroutine_context* context){
         global_coroutine_context_use = NULL;
     }
 
-    //加入新关系
-    if(global_coroutine_context_pool){
-        context->next = global_coroutine_context_pool;
-        global_coroutine_context_pool->prev = context;
-        context->prev = NULL;
-        global_coroutine_context_pool = context;
-    }else{
-        global_coroutine_context_pool = context;
+    //加入新关系,末尾添加
+    if(global_coroutine_context_pool_end == NULL){//可用池为空
+        //可用池为空
+        global_coroutine_context_pool_end = global_coroutine_context_pool = context;
         context->prev = NULL;
         context->next = NULL;
+    }else if(global_coroutine_context_pool_end == global_coroutine_context_pool){//可用池为1
+        global_coroutine_context_pool_end = context;
+        global_coroutine_context_pool->next = context;
+        global_coroutine_context_pool_end->prev = global_coroutine_context_pool;
+    }else{
+        context->prev = global_coroutine_context_pool_end;
+        global_coroutine_context_pool_end->next = context;
+        context->next = NULL;
+        global_coroutine_context_pool_end = context;
     }
 
     context_count++;
+    bufferevent_free(context->bev);
+
     asser_event_continue();
 }
 
@@ -178,19 +196,23 @@ void init_coroutine_set_request(sapi_coroutine_context* context,fcgi_request *re
 }
 
 /**
- * 切换协程
+ * 切换协程,取池中第一个
  */
 sapi_coroutine_context* use_coroutine_context(){
     if(context_count>0){
         sapi_coroutine_context* result = global_coroutine_context_pool;
 
         if(global_coroutine_context_pool && global_coroutine_context_pool->next){
+            //有两个以上
             global_coroutine_context_pool = global_coroutine_context_pool->next;
             global_coroutine_context_pool->prev = NULL;
         }else{
+            //有一个
             global_coroutine_context_pool = NULL;
+            global_coroutine_context_pool_end =NULL;
         }
 
+        //加入使用池
         if(global_coroutine_context_use){
             result->next = global_coroutine_context_use;
             result->prev = NULL;
@@ -231,7 +253,11 @@ void init_coroutine_context(int idx){
 
     //context加入链表
     if(global_coroutine_context_pool == NULL){
+        global_coroutine_context_pool_end = global_coroutine_context_pool = context;
+    }else if(global_coroutine_context_pool_end == global_coroutine_context_pool){//池中有一个数据
         global_coroutine_context_pool = context;
+        global_coroutine_context_pool->next = global_coroutine_context_pool_end;
+        global_coroutine_context_pool_end->prev = global_coroutine_context_pool;
     }else{
         global_coroutine_context_pool->prev = context;
         context->next = global_coroutine_context_pool;
@@ -242,6 +268,7 @@ void init_coroutine_context(int idx){
 
 void init_coroutine_static(){
     global_coroutine_context_pool = NULL;
+    global_coroutine_context_pool_end = NULL;
     global_coroutine_context_use = NULL;
     context_count = 0;
 }
@@ -254,6 +281,7 @@ void init_coroutine_info(){
     SG(coroutine_info).checkout_coroutine_context = checkout_coroutine_context;
     SG(coroutine_info).resume_coroutine_context = resume_coroutine_context;
     SG(coroutine_info).get_event_base = get_event_base;
+    SG(coroutine_info).get_evdns_base = get_evdns_base;
 
     SG(coroutine_info).context_pool = &global_coroutine_context_pool;
     SG(coroutine_info).context_use = &global_coroutine_context_use;
