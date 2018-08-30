@@ -926,9 +926,13 @@ void fcgi_destroy_request(fcgi_request *req) {
 
 static inline ssize_t safe_write(fcgi_request *req, const void *buf, size_t count)
 {
-
-	// bufferevent_write(req->bev, ((char*)buf), count);
+	// struct evbuffer *evreturn;
+	// evreturn = evbuffer_new();
+	// evbuffer_add_printf(evreturn,buf);
+	// bufferevent_write_buffer(req->bev,evreturn);
+	// evbuffer_free(evreturn);
 	// return count;
+
 	int    ret;
 	size_t n = 0;
 

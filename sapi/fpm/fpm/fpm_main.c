@@ -1902,6 +1902,8 @@ void socket_read_cb(struct bufferevent *bev, void *arg)
 	// init_request_info();//初始化request_info
 	// fpm_request_info();//初始化   fpm_scoreboard_proc_s
 
+    // fcgi_request_set_keep(request, 1);//保持长连接
+
 	/* request startup only after we've done all we can to
 	 *            get path_translated */
 	if (UNEXPECTED(php_request_startup() == FAILURE)) {
@@ -1988,19 +1990,21 @@ fastcgi_request_done2:
 
 void do_accept(evutil_socket_t listener, short event, void *arg)  
 {  
+	struct sockaddr_storage ss;  
+    socklen_t slen = sizeof(ss);
+    int fd = accept(listener, (struct sockaddr*)&ss, &slen);
+	evutil_make_socket_nonblocking(fd);
+
+	if(fd<0){
+		return;
+	}
+
 	sapi_coroutine_context* context = use_coroutine_context();
     SG(coroutine_info).context = context;
     SG(sapi_started) = 0;
-
     struct event_base *base = arg;  
-    struct sockaddr_storage ss;  
-    socklen_t slen = sizeof(ss);
-    context->fd = accept(listener, (struct sockaddr*)&ss, &slen);
-	evutil_make_socket_nonblocking(context->fd);
 
-	// char txt3[100];
-	// sprintf(txt3,"fd:%d,pid:%d\n",context->fd,getpid());
-	// test_log(txt3);
+    context->fd = fd;
 
 	// struct bufferevent* bev = bufferevent_socket_new(base, context->fd, BEV_OPT_THREADSAFE | BEV_OPT_UNLOCK_CALLBACKS);
 	struct bufferevent* bev = bufferevent_socket_new(base, context->fd, BEV_OPT_CLOSE_ON_FREE);
