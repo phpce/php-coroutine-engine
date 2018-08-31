@@ -84,9 +84,9 @@ typedef struct _coro_http_param
 
 void free_request(coro_http_param* http_param){
     // evhttp_connection_free(http_param->connection);
-    // evhttp_connection_free_on_completion(http_param->connection);
+    evhttp_connection_free_on_completion(http_param->connection);
     evhttp_uri_free(http_param->uri);
-    free(http_param);
+    efree(http_param);
 }
 
 int ReadHeaderDoneCallback(struct evhttp_request* remote_rsp, void* arg)
@@ -197,7 +197,7 @@ void RemoteRequestErrorCallback(enum evhttp_request_error error, void* arg)
 
 void RemoteConnectionCloseCallback(struct evhttp_connection* connection, void* arg)
 {
-
+    // test_log("=== evhttp connection close ===\n");
 }
 
 /* {{{ PHP_INI
@@ -230,7 +230,7 @@ PHP_FUNCTION(coro_http_get)
         RETURN_STR(result);
     }
     char* url = ZSTR_VAL(zval_get_string(param));
-    coro_http_param* coro_param = malloc(sizeof(coro_http_param));
+    coro_http_param* coro_param = emalloc(sizeof(coro_http_param));
     struct evhttp_uri* uri = evhttp_uri_parse(url);
     coro_param->context = SG(coroutine_info).context;
     coro_param->uri = uri;

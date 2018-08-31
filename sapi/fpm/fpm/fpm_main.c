@@ -1864,11 +1864,30 @@ void event_cb(struct bufferevent *bev, short event, void *arg)
 {
 	sapi_coroutine_context* context = (sapi_coroutine_context*)arg;
     checkout_coroutine_context(context);
+	
 	// if(event & BEV_EVENT_EOF)
 	// 	test_log("connection closed\n");
 	// else if (event & BEV_EVENT_ERROR)
 	// 	test_log("some other error\n");
-	bufferevent_free(bev);
+
+	context->fd=NULL;//标记fd失效
+
+	//提前结束请求,但不释放context, context会在协程远程返回后释放
+
+	destroy_op_array(context->op_array);
+    efree_size(context->op_array, sizeof(zend_op_array));
+#if HAVE_BROKEN_GETCWD
+    if ((int)*context->old_cwd_fd != -1) {
+        fchdir(*context->old_cwd_fd);
+        close(*context->old_cwd_fd);
+    }
+#else
+    SG(coroutine_info).free_old_cwd(context->old_cwd,context->use_heap);
+#endif
+    SG(coroutine_info).close_request();
+
+    bufferevent_free(bev);
+
 }
 
 void socket_read_cb(struct bufferevent *bev, void *arg)
@@ -2006,9 +2025,7 @@ void do_accept(evutil_socket_t listener, short event, void *arg)
 
     context->fd = fd;
 
-	// struct bufferevent* bev = bufferevent_socket_new(base, context->fd, BEV_OPT_THREADSAFE | BEV_OPT_UNLOCK_CALLBACKS);
 	struct bufferevent* bev = bufferevent_socket_new(base, context->fd, BEV_OPT_CLOSE_ON_FREE);
-	// struct bufferevent* bev = bufferevent_socket_new(base, context->fd, 0);
 	context->bev = bev;
 	bufferevent_setcb(bev, socket_read_cb, NULL, event_cb, context);
 

@@ -144,7 +144,7 @@ typedef struct _sapi_coroutine_context{
     int thread_id;
     zval* return_value;
     void* tmpData;//use to store data
-    int fd;
+    int fd;//if 0 or null ,connection close
     struct bufferevent* bev;
 } sapi_coroutine_context;
 

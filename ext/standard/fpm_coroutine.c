@@ -94,6 +94,11 @@ void checkout_coroutine_context(sapi_coroutine_context* context){
 void resume_coroutine_context(){
 
     sapi_coroutine_context* context = SG(coroutine_info).context;
+    if(context->fd == NULL){//客户端已断开连接
+        free_coroutine_context(SG(coroutine_info).context);
+        return;
+    }
+
     int r = setjmp(*context->buf_ptr);//yield之后的代码段，设置起始标记
     if(r == CORO_DEFAULT){//继续
         // zend_vm_stack_free_args(context->prev_execute_data);
@@ -185,7 +190,8 @@ void free_coroutine_context(sapi_coroutine_context* context){
     }
 
     context_count++;
-    bufferevent_free(context->bev);
+    if(context->fd != NULL)
+        bufferevent_free(context->bev);
 
     asser_event_continue();
 }
