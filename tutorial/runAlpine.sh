@@ -36,11 +36,28 @@ apk add libmcrypt-dev
 apk add gettext-dev
 apk add supervisor
 
-cd /data/soft/ && wget https://github.com/phpce/systemtap/archive/master.zip
-cd /data/soft/ && unzip master.zip
+# cd /data/soft/ && wget https://github.com/phpce/systemtap/archive/master.zip
+# cd /data/soft/ && unzip master.zip
+cd /data/soft/ &&wget https://sourceware.org/elfutils/ftp/0.170/elfutils-0.170.tar.bz2
+cd /data/soft/ &&tar xf elfutils-0.170.tar.bz2
 
-cd /data/soft/ && wget https://github.com/phpce/elfutils/archive/master.zip
-cd /data/soft/ && unzip master.zip.1
+# cd /data/soft/ && wget https://github.com/phpce/elfutils/archive/master.zip
+# cd /data/soft/ && unzip master.zip.1
+cd /data/soft/ && wget https://sourceware.org/systemtap/ftp/releases/systemtap-3.1.tar.gz
+cd /data/soft/ && tar zxf systemtap-3.1.tar.gz
+cd systemtap-3.1
+./configure --prefix=/opt/stap --disable-docs \
+    --disable-publican --disable-refdocs CFLAGS="-g -O2" \
+    --with-elfutils=../elfutils-0.170
+make -j$(getconf _NPROCESSORS_ONLN) && sudo make install
+
+export STAP_HOME=/opt/stap/
+
+export PATH=$STAP_HOME:$PATH
+
+stap -V
+
+
 # apk add elfutils-dev
 # apk add elfutils-libelf
 # apk add libdw-dev
