@@ -38,24 +38,24 @@ apk add supervisor
 
 # cd /data/soft/ && wget https://github.com/phpce/systemtap/archive/master.zip
 # cd /data/soft/ && unzip master.zip
-cd /data/soft/ &&wget https://sourceware.org/elfutils/ftp/0.170/elfutils-0.170.tar.bz2
-cd /data/soft/ &&tar xf elfutils-0.170.tar.bz2
+# cd /data/soft/ &&wget https://sourceware.org/elfutils/ftp/0.170/elfutils-0.170.tar.bz2
+# cd /data/soft/ &&tar xf elfutils-0.170.tar.bz2
 
-# cd /data/soft/ && wget https://github.com/phpce/elfutils/archive/master.zip
-# cd /data/soft/ && unzip master.zip.1
-cd /data/soft/ && wget https://sourceware.org/systemtap/ftp/releases/systemtap-3.1.tar.gz
-cd /data/soft/ && tar zxf systemtap-3.1.tar.gz
-cd systemtap-3.1
-./configure --prefix=/opt/stap --disable-docs \
-    --disable-publican --disable-refdocs CFLAGS="-g -O2" \
-    --with-elfutils=../elfutils-0.170
-make -j$(getconf _NPROCESSORS_ONLN) && sudo make install
+# # cd /data/soft/ && wget https://github.com/phpce/elfutils/archive/master.zip
+# # cd /data/soft/ && unzip master.zip.1
+# cd /data/soft/ && wget https://sourceware.org/systemtap/ftp/releases/systemtap-3.1.tar.gz
+# cd /data/soft/ && tar zxf systemtap-3.1.tar.gz
+# cd systemtap-3.1
+# ./configure --prefix=/opt/stap --disable-docs \
+#     --disable-publican --disable-refdocs CFLAGS="-g -O2" \
+#     --with-elfutils=../elfutils-0.170
+# make -j$(getconf _NPROCESSORS_ONLN) && sudo make install
 
-export STAP_HOME=/opt/stap/
+# export STAP_HOME=/opt/stap/
 
-export PATH=$STAP_HOME:$PATH
+# export PATH=$STAP_HOME:$PATH
 
-stap -V
+# stap -V
 
 
 # apk add elfutils-dev
@@ -70,7 +70,7 @@ stap -V
 
 apk add freetds-dev
 
-apk add libzip
+apk add libzip-dev
 
 # cd /data/soft/ && wget http://nih.at/libzip/libzip-1.2.0.tar.gz
 # cd /data/soft/ && tar zxvf libzip-1.2.0.tar.gz && cd libzip-1.2.0 && ./configure --prefix=/usr/local && make && make install
@@ -96,7 +96,7 @@ apk add nginx
 # /usr/lib\
 # /usr/lib64'>>/etc/ld.so.conf&&ldconfig -v
 
-cd /data/soft/php-coroutine-engine && sh buildconf --force && ./configure --prefix=/usr/local/php7  --enable-fpm --enable-coro_http --enable-mysqlnd --enable-zip --with-pdo-mysql --with-openssl --enable-maintainer-zts --enable-opcache --with-curl --enable-bcmath --enable-calendar  --enable-dtrace --enable-exif --enable-ftp  --enable-mbregex --enable-mbstring --enable-pcntl --enable-phpdbg --enable-phpdbg-webhelper --enable-shmop --enable-soap --enable-sockets --enable-sysvmsg --enable-sysvsem --enable-sysvshm --enable-wddx  --with-bz2 --with-iconv --with-pic --with-xmlrpc  --with-mhash --with-mysql-sockunixunix=/tmp/mysql.sock --with-mysqli=mysqlnd --with-pdo-mysql=mysqlnd --with-kerberos --with-layout=GNU   --with-mcrypt=/usr/include --with-gd --with-jpeg-dir=/usr/include --with-png-dir=/usr/include  --with-webp-dir=/usr/include --with-freetype-dir=/usr/include --with-icu-dir=/usr --with-pspell --with-xsl --with-libzip=/usr/local --enable-zip --with-zlib --with-pdo-dblib --with-pdo-odbc=unixODBC,/usr --with-unixODBC=/usr --with-libedit --enable-dba --with-ldap --with-ldap-sasl --with-pdo-pgsql --with-pgsql --with-gdbm --enable-intl --with-gettext && make && make install
+cd /data/soft/php-coroutine-engine && sh buildconf --force && ./configure --prefix=/usr/local/php7  --enable-fpm --enable-coro_http --enable-mysqlnd --enable-zip --with-pdo-mysql --with-openssl --enable-maintainer-zts --enable-opcache --with-curl --enable-bcmath --enable-calendar --enable-exif --enable-ftp  --enable-mbregex --enable-mbstring --enable-pcntl --enable-phpdbg --enable-phpdbg-webhelper --enable-shmop --enable-soap --enable-sockets --enable-sysvmsg --enable-sysvsem --enable-sysvshm --enable-wddx  --with-bz2 --with-iconv --with-pic --with-xmlrpc  --with-mhash --with-mysql-sockunixunix=/tmp/mysql.sock --with-mysqli=mysqlnd --with-pdo-mysql=mysqlnd --with-kerberos --with-layout=GNU   --with-mcrypt=/usr/include --with-gd --with-jpeg-dir=/usr/include --with-png-dir=/usr/include  --with-webp-dir=/usr/include --with-freetype-dir=/usr/include --with-icu-dir=/usr --with-pspell --with-xsl --with-libzip=/usr/local --enable-zip --with-zlib --with-pdo-dblib --with-pdo-odbc=unixODBC,/usr --with-unixODBC=/usr --with-libedit --enable-dba --with-ldap --with-ldap-sasl --with-pdo-pgsql --with-pgsql --with-gdbm --enable-intl --with-gettext && make && make install
 
 #/usr/local/php7/bin/pecl install redis-3.1.2
 #if you need redis 4.1.1 then use this

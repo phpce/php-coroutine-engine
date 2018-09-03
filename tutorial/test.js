@@ -1,7 +1,7 @@
 //引入http模块
 var http = require("http");
 //设置主机名
-var hostName = '127.0.0.1';
+var hostName = '0.0.0.0';
 //设置端口
 var port = 8080;
 //创建服务
