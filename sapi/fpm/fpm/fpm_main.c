@@ -1897,7 +1897,7 @@ void socket_read_cb(struct bufferevent *bev, void *arg)
 	int fd = context->fd;
 
 	evutil_make_socket_nonblocking(context->fd);
-
+	
     //上下文内私有
     zend_file_handle file_handle; 
     fcgi_request *request = fpm_init_request(fd);//初始化request
@@ -1959,6 +1959,7 @@ void socket_read_cb(struct bufferevent *bev, void *arg)
 		goto fastcgi_request_done2;
 	}
 
+
 	/*
 	 * have to duplicate SG(request_info).path_translated to be able to log errrors
 	 * php_fopen_primary_script seems to delete SG(request_info).path_translated on failure
@@ -2003,6 +2004,7 @@ fastcgi_request_done2:
 	
     if(!close_request()){
     	// return false; //todo 请求达到最大数量 结束请求
+    	event_base_loopexit(SG(coroutine_info).get_event_base(),1000);
     }
     free_coroutine_context(SG(coroutine_info).context);
 }  
