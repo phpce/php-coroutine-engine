@@ -2004,7 +2004,7 @@ fastcgi_request_done2:
 	
     if(!close_request()){
     	// return false; //todo 请求达到最大数量 结束请求
-    	event_base_loopexit(SG(coroutine_info).get_event_base(),1000);
+    	event_base_loopexit(SG(coroutine_info).get_event_base(),0);
     }
     free_coroutine_context(SG(coroutine_info).context);
 }  
