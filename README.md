@@ -132,13 +132,16 @@ nginx 占用cpu略低于php-fpm，换个角度来讲，php-fpm协程的性能已
 修改每个进程中协程池大小方法：
 
 首先切换到root账号，在环境变量中增加环境变量（PHP_COROUTINE_ENGINE_COUNT环境变量指定每个进程开启的协程数）
+```
 echo 'export PHP_COROUTINE_ENGINE_COUNT=1024' >> ~/.bash_profile
 source ~/.bash_profile
+```
 在/etc/sudoers中修改配置，用来支持sudo的环境变量传递： 
+```
 Defaults    env_reset 
 为： 
 Defaults    !env_reset
-
+```
 2.启动时，请注意调整好PHP-FPM进程数量,php-fpm.d/www.conf中
 ```
  pm = static  
