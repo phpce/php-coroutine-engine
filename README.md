@@ -177,6 +177,8 @@ ext/coro_http 目录是为了测试协程开发的PHP扩展，提供了coro_http
 ```
 注意：linux 中需要增加--with-openssl ，不然安装会出错，mac不需要。  
 
+另外，因为好久没维护，发现MAC系统的iconv产生版本问题，可以在make的时候，替换Makefile中的-liconv成实际的地址即可。
+
 4.安装完成后修改php-fpm配置文件，设置PHP-FPM进程数。线上环境根据CPU数量和需要的协程数量调整，测试的时候可以设置成1（php-fpm.d/www.conf）
 主要是这两个参数
 ``` 
